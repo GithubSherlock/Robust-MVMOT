@@ -1,1 +1,0 @@
-# YOLOv11 file structure
