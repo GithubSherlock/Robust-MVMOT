@@ -97,29 +97,22 @@ Included in **data** folder:
 
 The **engine** folder contains core code related to model training, evaluation, and inference:
 
-`exporter.py`: used to export trained models to other formats such as ONNX or TensorRT.
-
-`model.py`: contains the model definition, and also includes methods for model initialisation and loading.
-
-`predictor.py`: contains the logic for inference and prediction, e.g. loading the model and making predictions on the input data.
-
-`results.py`: Used to store and process the results of the model output.
-
-`trainer.py`: contains the logic for the model training process.
-
-`tuner.py`: used for model hyperparameter tuning.
-
-`validator.py`: contains logic for model validation, such as evaluating model performance on a validation set.
+* `exporter.py`: used to export trained models to other formats such as ONNX or TensorRT.
+* `model.py`: contains the model definition, and also includes methods for model initialisation and loading.
+* `predictor.py`: contains the logic for inference and prediction, e.g. loading the model and making predictions on the input data.
+* `results.py`: Used to store and process the results of the model output.
+* `trainer.py`: contains the logic for the model training process.
+* `tuner.py`: used for model hyperparameter tuning.
+* `validator.py`: contains logic for model validation, such as evaluating model performance on a validation set.
 
 #### 2.6.5 hub
 
 The **hub** folder is typically used to handle operations related to platform or service integration, including:
 
-`auth.py`: handles authentication processes, such as API key validation or OAuth processes.
+* `auth.py`: handles authentication processes, such as API key validation or OAuth processes.
+* `session.py`: manages sessions, including creating and maintaining persistent sessions.
 
-`session.py`: manages sessions, including creating and maintaining persistent sessions.
-
-`utils.py`: contains a number of generic utility functions that may be used to support authentication and session management functions.
+* `utils.py`: contains a number of generic utility functions that may be used to support authentication and session management functions.
 
 #### 2.6.6 models (key)
 
@@ -176,58 +169,52 @@ The **trackers** folder contains the scripts and modules that implement the obje
 
 The **utils** directory contains several Python scripts, each with a specific function:
 
-`callbacks.py`: contains callback functions that are called during training.
+* `callbacks.py`: contains callback functions that are called during training.
 
-`autobatch.py`: used to implement batch optimisations to improve the efficiency of training or inference.
+* `autobatch.py`: used to implement batch optimisations to improve the efficiency of training or inference.
 
-`benchmarks.py`: contains functions related to performance benchmarking.
+* `benchmarks.py`: contains functions related to performance benchmarking.
 
-`checks.py`: used for various checks in the project, such as parameter validation or environment checking.
+* `checks.py`: used for various checks in the project, such as parameter validation or environment checking.
 
-`dist.py`: deals with tools related to distributed computing.
+* `dist.py`: deals with tools related to distributed computing.
 
-`downloads.py`: contains scripts for downloading resources such as data or models.
+* `downloads.py`: contains scripts for downloading resources such as data or models.
 
-`errors.py`: defines classes and functions related to error handling. files.py: contains tool functions related to file manipulation.
+* `errors.py`: defines classes and functions related to error handling. files.py: contains tool functions related to file manipulation.
 
-`instance.py`: contains tools for instantiating objects or models.
+* `instance.py`: contains tools for instantiating objects or models.
 
-`loss.py`: defines the loss function.
+* `loss.py`: defines the loss function.
 
-`metrics.py`: contains metrics calculation functions for evaluating model performance.
+* `metrics.py`: contains metrics calculation functions for evaluating model performance.
 
-`ops.py`: contains custom operations such as special mathematical operations or data transformations.
+* `ops.py`: contains custom operations such as special mathematical operations or data transformations.
+* `patches.py`: tools for implementing modifications or patch applications.
 
-`patches.py`: tools for implementing modifications or patch applications.
+* `plotting.py`: contains plotting tools related to data visualisation.
+* `tal.py`: some functional applications of loss functions.
 
-`plotting.py`: contains plotting tools related to data visualisation.
+* `torch_utils.py`: provides PyTorch-related tools and helper functions, including the computation of GFLOPs.
 
-`tal.py`: some functional applications of loss functions.
-
-`torch_utils.py`: provides PyTorch-related tools and helper functions, including the computation of GFLOPs.
-
-`triton.py`: possibly related to NVIDIA Triton Inference Server prisoner integration.
-
-`tuner.py`: contains tools related to model or algorithm tuning.
+* `triton.py`: possibly related to NVIDIA Triton Inference Server prisoner integration.
+* `tuner.py`: contains tools related to model or algorithm tuning.
 
 ### 2.7 Files in sibling directories
 
 Inside this is the project's fundamental configuration and documentation files:
 
-`.gitignore`: a Git configuration file that specifies files to be ignored by Git version control Q.
+* `.gitignore`: a Git configuration file that specifies files to be ignored by Git version control Q.
+* `.pre-commit-config.yaml`: configuration file for pre-commit hooks to automatically perform code quality checks before committing.
 
-`.pre-commit-config.yaml`: configuration file for pre-commit hooks to automatically perform code quality checks before committing.
+* `CITATION.cff`: provides formatting instructions on how to reference the item.
 
-`CITATION.cff`: provides formatting instructions on how to reference the item.
+* `CONTRIBUTING.md`: instructions on how to contribute code to the project.
+* `LICENSE`: contains licence information for the project.
+* `MANIFEST.in`: lists the files to include when building and distributing Python packages.
 
-`CONTRIBUTING.md`: instructions on how to contribute code to the project.
+* `README.md` and `README.zh-CN.md`: description files for the project, in English and Chinese respectively.
 
-`LICENSE`: contains licence information for the project.
+* `requirements.txt`: lists the Python dependencies needed to run the project.
 
-`MANIFEST.in`: lists the files to include when building and distributing Python packages.
-
-`README.md` and `README.zh-CN.md`: description files for the project, in English and Chinese respectively.
-
-`requirements.txt`: lists the Python dependencies needed to run the project.
-
-`setup.cfg` and `setup.py`: contains scripts to set up project installation and distribution.
+* `setup.cfg` and `setup.py`: contains scripts to set up project installation and distribution.
