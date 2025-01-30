@@ -1,0 +1,3 @@
+Test Name,detect/mAP,detect/moda,detect/modp,detect/precision,detect/recall,track/idf1,track/mota,track/motp
+wild_135_segnet_2_res18_Z4,0.95,82.458,78.865,95.799,86.239,0.74,0.787,0.161
+wild_135_segnet_2_res18_Z4_026,0.945,72.899,78.336,94.716,77.206,0.776,0.683,0.137
