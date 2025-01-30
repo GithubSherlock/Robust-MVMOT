@@ -1,0 +1,6 @@
+model:
+  model_name: 'segnet'
+
+  kwargs:
+    use_avgpool: False
+    encoder_latent_dim: 256

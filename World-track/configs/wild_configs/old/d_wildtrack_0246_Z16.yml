@@ -1,0 +1,14 @@
+data:
+  class_path: datasets.PedestrianDataModule
+  init_args:
+    data_dir: "/media/rasho/Data 1/Arbeit/dataset/wildtrack"  # "/usr/home/tee/Developer/datasets/WILDTRACK"
+    train_cameras: [0,2,4,6]
+    test_cameras: [0,2,4,6]
+
+model:
+  resolution: [120, 16, 360]  # Y,Z,X
+  bounds: [0, 1440, 0, 480, 0, 200]  # xmin,xmax,ymin,ymax,zmin,zmax
+  depth: [100, 0, 2000]
+  num_cameras: 4
+  num_ids: 1201
+  experiment_name: 'log_name_holder_test_1'

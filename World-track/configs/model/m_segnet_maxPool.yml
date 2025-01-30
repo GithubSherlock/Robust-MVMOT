@@ -1,0 +1,11 @@
+model:
+  model_name: 'Segnet_e'
+  encoder_name: 'res18'
+
+  kwargs:
+    # encoder_latent_dim: 256
+    latent_dim: 256  # the same as encoder_latent_dim
+
+    waighting_mode: 'None'
+    feat_direction_mode: 'None'
+    aggregate_mode: 'max_pool'

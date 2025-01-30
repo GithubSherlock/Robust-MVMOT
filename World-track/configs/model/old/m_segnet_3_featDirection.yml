@@ -1,0 +1,12 @@
+model:
+  model_name: 'Segnet_e'
+
+  kwargs:
+    # encoder_latent_dim: 256
+    latent_dim: 256  # the same as encoder_latent_dim
+    use_avgpool: False
+    use_2DConv: True
+    waighting_mode: 'None'
+    feat_direction: 'concat'
+
+
