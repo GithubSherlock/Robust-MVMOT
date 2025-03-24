@@ -1,12 +1,13 @@
 import subprocess
+import time
 from time import sleep
-from pathlib import Path
-import torch.multiprocessing as mp
+from tests_to_run import *
+import argparse
+
 import os
 import yaml
-from icecream import ic
-from prompt_toolkit.contrib.telnet import TelnetServer
-from extra_util.system_info import SystemInfo
+
+import socket
 
 """
 Naming convention:
@@ -18,37 +19,32 @@ folder with the name
 example: (train, test)_(dataset)_(used_views)_(used_model)_(model_version)_(back_bone)  
 """
 
-if SystemInfo.get_os_info()['Operating system'] == 'Linux':
-    OS_CONFIG = "os_linux"
-    """
-    MODELS_FOLDER: where i save the trained models
-    TESTS_MODELS: where i save the testes of each model, i usualy test the models on 2 diffrent camera views
-    """
-    MODELS_FOLDER = '/home/deep/PythonCode/EarlyBird/World_track-main/model_weights'
-    TESTS_MODELS = '/home/deep/PythonCode/EarlyBird/World_track-main/tests'
-elif SystemInfo.get_os_info()['Operating system'] == 'Windows':
-    OS_CONFIG = "os_windows"
-    MODELS_FOLDER = ''
-    TESTS_MODELS = ''
-elif SystemInfo.get_os_info()['Operating system'] == 'Darwin':
-    MODELS_FOLDER = ''
-    TESTS_MODELS = ''
-    OS_CONFIG = "os_macos"
 
-# OS_Windows = False
-# if os.name == 'nt':  # the code is running on windows
-#     OS_Windows = True
+def get_folder_with_smallest_val_loss(root_folder):
+    smallest_loss = float('inf')
+    smallest_folder = None
 
-# if OS_Windows:
-#     MODELS_FOLDER = 'D:\Arbeit\models\EarlyBird_models'
-#     TESTS_MODELS = 'D:\Arbeit\models\EarlyBird_tests'
-#     OS_CONFIG = "Windows"
-# else:
-#     MODELS_FOLDER = '/media/rasho/M2_Samsung990/Work/Models/EarlyBird/models'
-#     TESTS_MODELS = '/media/rasho/M2_Samsung990/Work/Models/EarlyBird/tests'
-#     OS_CONFIG = "Linux"
+    # Iterate through the folders in the root directory
+    for folder_name in os.listdir(root_folder):
+        try:
+            # Split the folder name and find the val_loss part (e.g., '4.35' from 'val_loss=4.35')
+            parts = folder_name.split('val_loss=')  # Split at 'val_loss='
+            if len(parts) > 1:
+                val_loss_str = parts[1].split('.ckpt')[0]  # Extract the number part before '.ckpt'
+                val_loss = float(val_loss_str)
 
-# print(OS_Windows)
+                # Compare and track the smallest val_loss
+                if val_loss < smallest_loss:
+                    smallest_loss = val_loss
+                    smallest_folder = folder_name
+        except ValueError:
+            # If conversion to float fails, ignore this folder
+            continue
+
+    if smallest_folder:
+        return os.path.join(root_folder, smallest_folder)
+    else:
+        return None
 
 
 def change_folder_name(test_name, console_output=None, is_training=True):
@@ -94,56 +90,69 @@ def change_folder_name(test_name, console_output=None, is_training=True):
         with open(os.path.join(new_name, "console_output.txt"), "w") as file:
             file.write(str('\n'.join(clean_console_output)))
 
-    return folder_to_change
+    return folder_to_change, test_name
 
 
-def command_training(test_name, train_config, model_config, data_config):
+def command_training(test_name, train_config, model_config, data_config, auxiliary_config):
     print('\n---------- Training model ', test_name, '\n')
     script_path = 'main.py'
     # Convert to the format used by os.path
     train_config = os.path.normpath(train_config)
     model_config = os.path.normpath(model_config)
     data_config = os.path.normpath(data_config)
+    auxiliary_config = os.path.normpath(auxiliary_config)
 
     if PRINT_COMMAND:
         print('python', script_path, 'fit',
               '-c', os.path.join(f'configs', str(train_config) + '.yml'),
               '-c', os.path.join(f'configs', str(data_config) + '.yml'),
               '-c', os.path.join(f'configs', str(model_config) + '.yml'),
-              '-c', os.path.join(f'configs', str(OS_CONFIG) + '.yml'))
+              '-c', os.path.join(f'configs', str(OS_CONFIG) + '.yml'),
+              '-c', os.path.join(f'configs', str(auxiliary_config) + '.yml'),
+              )
 
     subprocess.run(['python', script_path, 'fit',
                     '-c', os.path.join(f'configs', str(train_config) + '.yml'),
                     '-c', os.path.join(f'configs', str(data_config) + '.yml'),
                     '-c', os.path.join(f'configs', str(model_config) + '.yml'),
                     '-c', os.path.join(f'configs', str(OS_CONFIG) + '.yml'),
+                    '-c', os.path.join(f'configs', str(auxiliary_config) + '.yml'),
+                    # '-c', auxiliary_commands,
                     ])
     # need sleep after each subprocess
     sleep(2)
 
-    change_folder_name('train_' + test_name)
+    folder_to_change, test_name = change_folder_name('train_' + test_name)
+    return test_name
 
 
-def command_testing(test_name):
+def command_testing(test_name, model_folder_path=None):
     print('\n---------- Testing model ', test_name, '\n')
     script_path = 'main.py'
+    models_folder = MODELS_FOLDER
+    if model_folder_path is not None:
+        models_folder = MODELS_FOLDER + '/' + model_folder_path
 
     # enshoure the model is saved and exsts
-    config_path = f'{MODELS_FOLDER}/train_{test_name}'
+    config_path = f'{models_folder}/train_{test_name}'
     with open(config_path + '/config.yaml', 'r') as file:
         config = yaml.safe_load(file)
 
+    model_path = get_folder_with_smallest_val_loss(f'{models_folder}/train_{test_name}/checkpoints')
+
+    print('best model ', model_path)
+
     if PRINT_COMMAND:
-        command = 'python ' + script_path + ' test ' + ' -c ' + config_path + '/config.yaml' + ' --ckpt ' + f'{config_path}/checkpoints/last.ckpt'
+        command = 'python ' + script_path + ' test ' + ' -c ' + config_path + '/config.yaml' + ' --ckpt ' + f'{model_path}'
         # print(command)
         command = command.replace("Data 1", r"Data\ 1")
-        print(command)
-        # print('python', script_path, 'test', '-c', f'{MODELS_FOLDER}/train_{test_name}/config.yaml',
-        #       '--ckpt', f'{MODELS_FOLDER}/train_{test_name}/checkpoints/last.ckpt', )
+        # print(command)
+        print('python', script_path, 'test', '-c', f'{MODELS_FOLDER}/train_{test_name}/config.yaml',
+              '--ckpt', model_path)
 
     results = subprocess.run(['python', script_path, 'test',
-                              '-c', f'{MODELS_FOLDER}/train_{test_name}/config.yaml',
-                              '--ckpt', f'{MODELS_FOLDER}/train_{test_name}/checkpoints/last.ckpt',
+                              '-c', f'{models_folder}/train_{test_name}/config.yaml',
+                              '--ckpt', model_path,
                               ],
                              capture_output=True, text=True
                              )
@@ -159,10 +168,15 @@ def command_testing(test_name):
         change_folder_name('Assessing_Holder_' + test_name, console_output=console_output, is_training=False)
 
 
-def testing_on_different_views(test_name, views):
+def testing_on_different_views(test_name, views, model_folder_path=None):
     print('\n---------- Testing model on different views', test_name, 'views:', views, '\n')
+
+    models_folder = MODELS_FOLDER
+    if model_folder_path is not None:
+        models_folder = MODELS_FOLDER + '/' + model_folder_path
+
     # crate new yml with the new test_views
-    config_path = f'{MODELS_FOLDER}/train_{test_name}'
+    config_path = f'{models_folder}/train_{test_name}'
 
     # Load the YAML file
     with open(config_path + '/config.yaml', 'r') as file:
@@ -177,16 +191,18 @@ def testing_on_different_views(test_name, views):
 
     script_path = 'main.py'
 
+    model_path = get_folder_with_smallest_val_loss(f'{config_path}/checkpoints')
     if PRINT_COMMAND:
-        command = 'python ' + script_path + ' test ' + '-c ' + config_path + '/config_2.yaml ' + '--ckpt ' + f'{config_path}/checkpoints/last.ckpt'
+        command = 'python ' + script_path + ' test ' + '-c ' + config_path + '/config_2.yaml ' + '--ckpt ' + f'{model_path}'
         command.replace("Data 1", "Data\ 1")
         print(command)
         # print('python', script_path, 'test', '-c', config_path + '/config_2.yaml',
         #       '--ckpt', f'{config_path}/checkpoints/last.ckpt')
 
+    # model_path = get_folder_with_smallest_val_loss(f'{config_path}/checkpoints')
     results = subprocess.run(['python', script_path, 'test',
                               '-c', config_path + '/config_2.yaml',
-                              '--ckpt', f'{config_path}/checkpoints/last.ckpt'],
+                              '--ckpt', model_path],
                              capture_output=True, text=True
                              )
     console_output = None
@@ -219,35 +235,112 @@ def config_files_exists(tests_dic):
 
 
 if __name__ == '__main__':
-    # test_name : [training_config, used_model, dataset_config, testing_views]
-    tests = {
-        'wild_0246_segnet_maxPool_res18_Z4': ['t_fit', 'model/m_segnet_maxPool',
-                                              'wild_configs/d_wildtrack_0246_Z4', [1, 3, 4, 5]],
-        'wild_1345_segnet_maxPool_res18_Z4': ['t_fit', 'model/m_segnet_maxPool',
-                                              'wild_configs/d_wildtrack_1345_Z4', [0, 2, 4, 6]],
+    pc_name = os.getenv('COMPUTERNAME') or os.getenv('HOSTNAME') or socket.gethostname()
 
-    }
-    # print all the commands
+    if pc_name == 'rasho-MS-129':
+        MODELS_FOLDER = '/media/rasho/M2_Samsung990/Work/Models/EarlyBird/models/'
+        TESTS_MODELS = '/media/rasho/M2_Samsung990/Work/Models/EarlyBird/tests/'
+        OS_CONFIG = "os_Ubuntu_129"
+        tests = tests_129
+    if pc_name == 'ipi8':
+        MODELS_FOLDER = '/data/share/ali/Models/EarlyBird/models/'
+        TESTS_MODELS = '/data/share/ali/Models/EarlyBird/tests/'
+        OS_CONFIG = "os_Ubuntu_8"
+        tests = tests_8
+    if pc_name == 'THE_BEST_PC':
+        MODELS_FOLDER = r'D:\Arbeit\models\EarlyBird\models\\'
+        TESTS_MODELS = r'D:\Arbeit\models\EarlyBird\tests\\'
+        OS_CONFIG = "os_windows"
+        tests = tests_129
+    #####
+    #####
+
+    experiment_name = 'all_models_fit1'  # 'use_pretrained_MaskedRcnn'# 'averagePool_2DMask_3'  # 'averagePool_2DMask_2'# 'concate_avrage'
+
+
+    # 'fine_tune_detached_2d_detections'  # 'fine_tune_avrage_pooling_2' #'concate_avrage_IPI8' # 'concate_avrage'
+    def list_of_strings(arg):
+        return arg.split(',')
+
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-mn", "--model_name", help="a dict of the models to train", default=None)
+    parser.add_argument("-en", "--experiment_name",
+                        help="name of experiment and the folder where it will be saved",
+                        default=experiment_name)
+    parser.add_argument("-nr", "--experiment_repetition", type=int,
+                        help="number of experiments repetition",
+                        default=1)
+    parser.add_argument("--add_suffix",
+                        help="add somthing to the begining of test name",
+                        default=None)
+    parser.add_argument('-mnl', '--model_names_list', type=list_of_strings,
+                        help="pass multiple model_name dict and there repetition, "
+                             "the names are seperated by ',' ... test_1,2,test_2,3,test_3,1",
+                        default=None)
+    parser.add_argument("--additional_args", default=None)
+    args = parser.parse_args()
+
+    if args.model_name is not None:
+        if args.model_name == 'tests_8_1':
+            tests = tests_8_1
+        if args.model_name == 'tests_8_2':
+            tests = tests_8_2
+
+    # repeat the rest n times
+    tests = add_suffix_to_test_name(tests, args.add_suffix)
+
+    # repeat the rest n times
+    tests = repeat_test_name(tests, args.experiment_repetition)
+
+    if args.model_names_list is not None:
+        # repeat the rest n times
+        tests = mearg_multiple_test(args.model_names_list)
+
+    for key in tests.keys():
+        print(key)
+    # print(tests.keys())
+    # exit()
+
+    experiment_name = args.experiment_name
+    print(f"Running on PC: {pc_name}")
+    # # print all the commands
     PRINT_COMMAND = True
+    MODELS_FOLDER = MODELS_FOLDER + experiment_name
+    TESTS_MODELS = TESTS_MODELS + experiment_name
+
+    if not os.path.exists(MODELS_FOLDER):
+        os.makedirs(MODELS_FOLDER)
+
+    if not os.path.exists(TESTS_MODELS):
+        os.makedirs(TESTS_MODELS)
 
     # enssure that all the file pathes are corect
     config_files_exists(tests)
 
     tests_length = len(tests)
+    problem_runs = []
     # run the trainings and tests
     for i, test_name in enumerate(tests.keys()):
-        # command_testing(test_name)
-        # testing_on_different_views(test_name, [0, 1])
-        # exit()
-        print(f'testing {i + 1} of {tests_length}')
+        start_time = time.time()
+
+        print('\n\n ----------------------------------------------------------------')
+        print(f'Experiments: {experiment_name}\nMODEL {i + 1} of {tests_length}')
 
         try:
             conf_files = tests[test_name]
             print('working on: ', test_name)
-            command_training(test_name, conf_files[0], conf_files[1], conf_files[2])
-            # change_folder_name('train_' + test_name)
-
+            command_training(test_name, conf_files[0], conf_files[1], conf_files[2], conf_files[4])
             command_testing(test_name)
             testing_on_different_views(test_name, conf_files[3])
+
         except:
-            print(f'problems with {test_name}')
+            problem_runs.append(test_name)
+            print(f'problems with {test_name} \n and \n')
+            for i in problem_runs: print(i)
+
+        fin_time = time.time()
+        print('finished: ', time.strftime('%H:%M:%S'))
+        running_time = round((fin_time - start_time) / 60, 2)
+        print('running for: ', running_time, ' minutes')
+
