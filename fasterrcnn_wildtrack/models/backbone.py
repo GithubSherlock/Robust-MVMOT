@@ -1,5 +1,4 @@
 import torchvision
-import torch
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
@@ -8,18 +7,6 @@ def _base_model_(pretrained=True):
     weight = FasterRCNN_ResNet50_FPN_Weights.DEFAULT if pretrained else None
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=weight)
     return model
-
-# def _base_model_(pretrained=True):
-#     """Build the base model"""
-#     weight = FasterRCNN_ResNet50_FPN_Weights.DEFAULT if pretrained else None
-#     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(
-#         weights=weight,
-#         trainable_backbone_layers=5,
-#         box_score_thresh=0.5,  # 设置检测阈值
-#         box_nms_thresh=0.3     # 设置NMS阈值
-#     )
-#     return model
-
 
 def build_fasterrcnn_freeze(num_classes=2):
     """
@@ -32,14 +19,14 @@ def build_fasterrcnn_freeze(num_classes=2):
     - Detection head: Completely trainable
     """
     model = _base_model_(pretrained=True)
-    for param in model.parameters(): # 首先设置所有参数可训练
+    for param in model.parameters(): # First set all parameters trainable
         param.requires_grad = True
-    for name, param in model.named_parameters(): # 按照策略冻结特定层
-        if "backbone.body.layer1" in name: # 冻结layer1
+    for name, param in model.named_parameters():
+        if "backbone.body.layer1" in name: # Freeze the layer1
             param.requires_grad = False
-        if "backbone.body.layer2.0" in name or "backbone.body.layer2.1" in name: # 冻结layer2的前两个block
+        if "backbone.body.layer2.0" in name or "backbone.body.layer2.1" in name: # Freeze the first two blocks of layer2
             param.requires_grad = False
-    in_features = model.roi_heads.box_predictor.cls_score.in_features # 替换检测头
+    in_features = model.roi_heads.box_predictor.cls_score.in_features # Change the detection head
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
 
