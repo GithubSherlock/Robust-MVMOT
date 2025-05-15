@@ -2,7 +2,7 @@ import os
 import torch
 import torch.utils.data
 import torchvision
-from utils import transforms as T
+import transforms as T
 from pycocotools import mask as coco_mask
 from pycocotools.coco import COCO
 
@@ -127,7 +127,7 @@ def convert_to_coco_api(ds):
     for img_idx in range(len(ds)):
         # find better way to get target
         # targets = ds.get_annotations(img_idx)
-        img, targets = ds[img_idx]
+        img, targets, _ = ds[img_idx]
         image_id = targets["image_id"]
         img_dict = {}
         img_dict["id"] = image_id
