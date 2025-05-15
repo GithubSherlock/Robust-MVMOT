@@ -1,15 +1,18 @@
-from utils import callbacks
-from utils import coco_eval
-from utils import coco_utils
-from utils import engine
-from utils import utils
-from utils import transforms
+from utils.callbacks import CheckpointManager, EarlyStopping, finalize_training
+from utils.coco_eval import *
+from utils.coco_utils import *
+from utils.engine import train_one_epoch, evaluate
+from utils.utils import *
+from utils.transforms import *
 
 __all__ = [
-    "callbacks",
+    "CheckpointManager",
+    "EarlyStopping",
+    "finalize_training",
+    "train_one_epoch",
+    "evaluate",
     "coco_eval",
     "coco_utils",
-    "engine",
-    "utils",
-    "transforms"
+    "transforms",
+    "utils"
 ]
