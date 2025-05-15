@@ -11,13 +11,23 @@ import glob
 import time
 import torch
 import logging
+import argparse
+from torch.nn.parallel import DataParallel
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from models import *
-from utils import utils
+from utils.utils import *
 from utils.engine import train_one_epoch, evaluate
 from utils.callbacks import CheckpointManager, EarlyStopping, finalize_training
 from datasets.wildtrack2_dataloader import create_wildtrack_dataloaders
+
+def setup_gpu_device(gpu_ids):
+    if gpu_ids:
+        os.environ["CUDA_VISIBLE_DEVICES"] = gpu_ids
+        device = torch.device("cuda:0")
+        gpu_list = [i for i in range(len(gpu_ids.split(',')))]
+        return device, gpu_list
+    return torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), []
 
 
 def format_time(seconds: float) -> str:
@@ -35,7 +45,7 @@ def format_time(seconds: float) -> str:
     seconds = int(seconds % 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-def train(model, device, NUM_EPOCHS, train_loader, val_loader, test_loader, model_type, base_dir_name):
+def train(model, gpu_ids, NUM_EPOCHS, train_loader, val_loader, test_loader, model_type, base_dir_name):
     """
     Main training function for object detection models
     
@@ -55,6 +65,7 @@ def train(model, device, NUM_EPOCHS, train_loader, val_loader, test_loader, mode
     Time Complexity: O(NUM_EPOCHS * (N_train + N_val))
     Space Complexity: O(model_size + batch_size)
     """
+    torch.cuda.empty_cache()
     # Create unique output directory
     counter = 0
     dir_name = f"{base_dir_name}_{model_type}_{counter}"
@@ -74,7 +85,14 @@ def train(model, device, NUM_EPOCHS, train_loader, val_loader, test_loader, mode
     console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
     logging.root.addHandler(console_handler)
     logging.root.setLevel(logging.INFO)
+
+    device, gpu_list = setup_gpu_device(gpu_ids)
+    if len(gpu_list) > 1 and torch.cuda.is_available():
+        model = DataParallel(model)
     logging.info(f'Using device: {device}')
+    logging.info(f'GPU IDs: {gpu_ids if gpu_ids else "Not specified"}')
+    logging.info(f'Number of GPUs: {torch.cuda.device_count() if torch.cuda.is_available() else 0}')
+    
     logging.info(f"Created directory: {target_dir}")
 
     """Initialize tensorboard writer and checkpoint manager"""
@@ -87,8 +105,9 @@ def train(model, device, NUM_EPOCHS, train_loader, val_loader, test_loader, mode
     logging.info(f"Starting training for {model_type} model")
     logging.info('='*50)
     logging.info(f"Total epochs: {NUM_EPOCHS}")
-    
-    for epoch in range(NUM_EPOCHS): # Training loop
+
+    """Training loop"""
+    for epoch in range(NUM_EPOCHS):
         logging.info(f"\nEpoch {epoch+1}/{NUM_EPOCHS}")
         base_lr = 1e-3 # Training phase
         optimizer, lr_scheduler = yosinski_optimizer(base_lr, model)
@@ -108,7 +127,7 @@ def train(model, device, NUM_EPOCHS, train_loader, val_loader, test_loader, mode
         with torch.no_grad(): # Validation loop
             val_loop = tqdm(val_loader, desc=f'Validation Epoch [{epoch+1}/{NUM_EPOCHS}]', 
                         total=len(val_loader), leave=False)
-            for i, (images, targets) in enumerate(val_loop):
+            for i, (images, targets, _) in enumerate(val_loop):
                 images = list(image.to(device) for image in images) # Move data to device
                 targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v 
                     for k, v in t.items()
@@ -171,7 +190,8 @@ def train(model, device, NUM_EPOCHS, train_loader, val_loader, test_loader, mode
 
     return model
 
-def main(NUM_EPOCHS: int, BATCH_SIZE: int, NUM_WORKERS: int, _BASE_MODEL_: bool, TRAIN_FINETUNING: bool, TRAIN_FREEZE: bool):
+def main(NUM_EPOCHS: int, BATCH_SIZE: int, NUM_WORKERS: int, gpu_ids: str = None, 
+         _BASE_MODEL_: bool = True, TRAIN_FINETUNING: bool = False, TRAIN_FREEZE: bool = False):
     """
     Main entry point for training different model configurations
     
@@ -184,45 +204,68 @@ def main(NUM_EPOCHS: int, BATCH_SIZE: int, NUM_WORKERS: int, _BASE_MODEL_: bool,
     Time Complexity: O(NUM_EPOCHS * num_models * (N_train + N_val))
     Space Complexity: O(model_size + batch_size)
     """
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # Setup device and data loaders
-    train_loader, val_loader, test_loader = create_wildtrack_dataloaders(
-        root_path="/root/autodl-tmp/project/documents/datasets/Wildtrack2",
+    device, gpu_list = setup_gpu_device(gpu_ids)
+    if len(gpu_list) > 1:
+        BATCH_SIZE *= len(gpu_list)
+    train_loader, val_loader, test_loader = create_wildtrack_dataloaders( # Create data loaders
+        root_path="/home/s-jiang/Documents/datasets/Wildtrack2",
         batch_size=BATCH_SIZE, num_workers=NUM_WORKERS) # nw: 12
 
     total_training_time = 0
+
+    if TRAIN_FREEZE: # Train feature-frozen model if requested
+        start_time = time.time()
+        model_freeze = build_fasterrcnn_freeze(num_classes=2).to(device)
+        if len(gpu_list) > 1:
+            model_freeze = DataParallel(model_freeze)
+        model_freeze = train(model_freeze, gpu_ids, NUM_EPOCHS, train_loader, val_loader, test_loader, 'freeze', 'model')
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        freeze_duration = time.time() - start_time
+        total_training_time += freeze_duration
+        logging.info(f'Freezed model training completed in: {format_time(freeze_duration)}')
+        
+    if TRAIN_FINETUNING: # Train fine-tuning model if requested    
+        start_time = time.time()
+        model_finetuning = build_fasterrcnn_finetuning(num_classes=2).to(device)
+        if len(gpu_list) > 1:
+            model_finetuning = DataParallel(model_finetuning)
+        model_finetuning = train(model_finetuning, gpu_ids, NUM_EPOCHS, train_loader, val_loader, test_loader,'finetuning', 'model')
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        finetuning_duration = time.time() - start_time
+        total_training_time += finetuning_duration
+        logging.info(f'Fine-tuning model training completed in: {format_time(finetuning_duration)}')
+
     if _BASE_MODEL_: # Train base model if requested
         start_time = time.time()
         model_base = _base_model_(pretrained=True).to(device)
-        model_base = train(model_base, device, NUM_EPOCHS, train_loader, val_loader, test_loader, 'standart', 'model')
+        if len(gpu_list) > 1:
+            model = DataParallel(model)
+        model_base = train(model_base, gpu_ids, NUM_EPOCHS, train_loader, val_loader, test_loader, 'standart', 'model')
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         base_duration = time.time() - start_time
         total_training_time += base_duration
         logging.info(f'Base model training completed in: {format_time(base_duration)}')
     
-    if TRAIN_FREEZE: # Train feature-frozen model if requested
-        start_time = time.time()
-        model_freese = build_fasterrcnn_freeze(num_classes=2).to(device)
-        model_freese = train(model_freese, device, NUM_EPOCHS, train_loader, val_loader, test_loader, 'freeze', 'model')
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        freeze_duration = time.time() - start_time
-        total_training_time += freeze_duration
-        logging.info(f'Freezed model training completed in: {format_time(freeze_duration)}')
-
-    if TRAIN_FINETUNING: # Train fine-tuning model if requested    
-        start_time = time.time()
-        model_finetuning = build_fasterrcnn_finetuning(num_classes=2).to(device)
-        model_finetuning = train(model_finetuning, device, NUM_EPOCHS, train_loader, val_loader, test_loader,'finetuning', 'model')
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        finetuning_duration = time.time() - start_time
-        total_training_time += finetuning_duration
-        logging.info(f'Fine-tuning model training completed in: {format_time(finetuning_duration)}')
-    
     logging.info('='*50)
     logging.info(f'All models trained, total training time: {format_time(total_training_time)}')
     logging.info('='*50)
 
 if __name__ == "__main__":
-    main(NUM_EPOCHS=200, BATCH_SIZE=8 , NUM_WORKERS=8, _BASE_MODEL_=False, TRAIN_FINETUNING=False, TRAIN_FREEZE=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--gpu_ids', type=str, default="5",
+                      help='Comma-separated list of GPU IDs to use (e.g., "0,1,2")')
+    parser.add_argument('--epochs', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=2)
+    parser.add_argument('--num_workers', type=int, default=8)
+    args = parser.parse_args()
+    
+    main(NUM_EPOCHS=args.epochs,
+         BATCH_SIZE=args.batch_size,
+         NUM_WORKERS=args.num_workers,
+         _BASE_MODEL_=False,
+         TRAIN_FINETUNING=True,
+         TRAIN_FREEZE=True,
+         gpu_ids=args.gpu_ids)
