@@ -18,9 +18,11 @@ def build_fasterrcnn_freeze(num_classes=2):
     - layer3, 4: Completely trainable (task-related features)
     - Detection head: Completely trainable
     """
-    model = _base_model_(pretrained=True)
+   model = _base_model_(pretrained=True)
+    for param in model.parameters(): # First set all parameters trainable
+        param.requires_grad = True
     for name, param in model.named_parameters():
-        if "backbone.body.layer1" in name: # Freeze the layer1
+        if "backbone.body.conv1" in name or "backbone.body.layer1" in name: # Freeze the layer1
             param.requires_grad = False
         if "backbone.body.layer2.0" in name or "backbone.body.layer2.1" in name: # Freeze the first two blocks of layer2
             param.requires_grad = False
