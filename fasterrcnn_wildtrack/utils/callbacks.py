@@ -48,7 +48,7 @@ class CheckpointManager:
         Save model checkpoint and return save path
         
         Args:
-            model: PyTorch model
+            model: PyTorch model (可能是 DataParallel 或普通模型)
             optimizer: Model optimizer
             lr_scheduler: Learning rate scheduler
             epoch: Current epoch number
@@ -57,21 +57,28 @@ class CheckpointManager:
         Returns:
             str: Path where checkpoint was saved
             
-        Time Complexity: O(model_size) - dominated by model state dict saving
+        Time Complexity: O(model_size)
         Space Complexity: O(model_size)
         """
+        # 检查是否为DataParallel模型
+        model_state_dict = model.module.state_dict() if isinstance(model, torch.nn.DataParallel) else model.state_dict()
+        
         checkpoint = {
             'epoch': epoch,
-            'model_state_dict': model.state_dict(),
+            'model_state_dict': model_state_dict,
             'optimizer_state_dict': optimizer.state_dict(),
-            'lr_scheduler_state_dict': lr_scheduler.state_dict(),
-            'map': mAP
+            'lr_scheduler_state_dict': lr_scheduler.state_dict() if lr_scheduler else None,
+            'map': mAP,
+            'is_parallel': isinstance(model, torch.nn.DataParallel)  # 记录是否为多GPU模型
         }
+        
         checkpoint_name = f'checkpoint_epoch_{epoch}_map_{mAP:.4f}.pth'
         checkpoint_path = os.path.join(self.checkpoints_dir, checkpoint_name)
         
+        # 保存检查点
         torch.save(checkpoint, checkpoint_path)
         logging.info(f'Saved checkpoint: {checkpoint_name}')
+        logging.info(f'Model type: {"Multi-GPU" if isinstance(model, torch.nn.DataParallel) else "Single-GPU"}')
         
         return checkpoint_path
     
