@@ -19,8 +19,6 @@ def build_fasterrcnn_freeze(num_classes=2):
     - Detection head: Completely trainable
     """
     model = _base_model_(pretrained=True)
-    for param in model.parameters(): # First set all parameters trainable
-        param.requires_grad = True
     for name, param in model.named_parameters():
         if "backbone.body.layer1" in name: # Freeze the layer1
             param.requires_grad = False
