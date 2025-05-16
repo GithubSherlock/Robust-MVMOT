@@ -37,7 +37,7 @@ class TransformSubset(torch.utils.data.Subset):
             if isinstance(img, torch.Tensor):
                 print(f"Original tensor - dtype: {img.dtype}, shape: {img.shape}")
             if self.transform is not None:
-                img, target = self.transform(img, target)
+                img, target, mask = self.transform(img, target, mask)
                 for t in self.transform.transforms:
                     img = t(img)
                     print(f"After {t.__class__.__name__} - dtype: {img.dtype}, "
