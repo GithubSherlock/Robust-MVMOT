@@ -7,6 +7,13 @@ def repeat_test_name(test_name, repetition=1):
             extended_dict[f"{num}_{key}"] = value
     return extended_dict
 
+# def repeat_test_name(test_name, repetition=1):
+#     """直接复制原始测试名称，不添加前缀"""
+#     extended_dict = {}
+#     for _ in range(repetition):
+#         extended_dict.update(test_name.copy())  # 使用 copy() 避免引用问题
+#     return extended_dict
+
 
 def add_suffix_to_test_name(test_name, suffix=None):
     # Extend the dictionary dynamically
@@ -127,12 +134,51 @@ tests_129_2 = {
                                                                   'auxiliary/use_all_pixels_feat_direction'],
 }
 
+tests_129_mean = {
+
+    'fit2_wild_1345_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
+                                                                  'model/m_segnet_mean',
+                                                                  'wild_configs/d_wildtrack_1345_Z4',
+                                                                  [0, 2, 4, 6],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
+                                                                  'model/m_segnet_mean',
+                                                                  'wild_configs/d_wildtrack_0246_Z4',
+                                                                  [1, 3, 4, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+tests_129_averagePool = {
+
+    'fit2_wild_1345_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_wildtrack_1345_Z4',
+                                                                  [0, 2, 4, 6],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_wildtrack_0246_Z4',
+                                                                  [1, 3, 4, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+### IPI8
+# tests_8 = {
+#     'fit2_wild_all_segnet_averagePool_512_res18_Z4': ['t_fit_IPI8', 'model/m_segnet_averagePool',
+#                                                       'wild_configs/d_wildtrack_IPI8',
+#                                                       [0, 1, 2, 3, 4, 5, 6],
+#                                                       'auxiliary/no_auxiliary'],
+# }
+
 tests_8 = {
-    'fit2_wild_all_segnet_averagePool_512_res18_Z4': ['t_fit_IPI8', 'model/m_segnet_averagePool',
+    'fit2_wild_all_segnet_averagePool_512_res18_Z4': ['t_fit_IPI8', 
+                                                      'model/m_segnet_maxPool', # mean or average pool
                                                       'wild_configs/d_wildtrack_IPI8',
                                                       [0, 1, 2, 3, 4, 5, 6],
-                                                      'auxiliary/no_auxiliary'],
-
+                                                      'auxiliary/no_auxiliary'
+                                                      ]
 }
 
 tests_8_1 = {
