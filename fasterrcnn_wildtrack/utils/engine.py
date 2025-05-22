@@ -2,7 +2,7 @@
 Object Detection Model Training Engine
 Implements training and evaluation loops for object detection models
 Author: Shiqi Jiang
-Date: 2025-04-25
+Date: 2025-05-22
 """
 
 
@@ -13,14 +13,12 @@ import logging
 import torch
 import torchvision.models.detection.mask_rcnn
 from tqdm import tqdm
-
 from utils import utils
+from models.optimizer import filter_by_mask
 from utils.coco_eval import CocoEvaluator
 from utils.coco_utils import get_coco_api_from_dataset
 
-
-def train_one_epoch(model, optimizer, data_loader, device, epoch: int, 
-                   print_freq: int, scaler=None):
+def train_one_epoch(model, optimizer, data_loader, device, epoch: int, print_freq: int, writer=None, scaler=None):
     """
     Train model for one epoch with progress tracking and logging
     
@@ -46,25 +44,35 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch: int,
     logging.info(f"Starting training epoch {epoch}")
 
     # Configure learning rate warmup for first epoch
-    lr_scheduler = None
-    if epoch == 0:
-        warmup_factor = 1.0 / 1000
-        warmup_iters = min(1000, len(data_loader) - 1)
-        lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=warmup_factor, total_iters=warmup_iters)
+    # lr_scheduler = None
+    # if epoch == 0:
+    #     warmup_factor = 1.0 / 1000
+    #     warmup_iters = min(1000, len(data_loader) - 1)
+    #     lr_scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=warmup_factor, total_iters=warmup_iters)
     # Initialize progress bar
     pbar = tqdm(total=len(data_loader), desc=header, leave=True)
-    for images, targets, _ in data_loader:
-        # Move data to device
+    for images, targets, _, masks in data_loader:
         images = list(image.to(device) for image in images)
         targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
+        masks = list(mask.to(device) for mask in masks)
+        filtered_targets = filter_by_mask(targets, masks)
+
         # Forward pass with optional mixed precision
         with torch.cuda.amp.autocast(enabled=scaler is not None):
-            loss_dict = model(images, targets) #############
+            loss_dict = model(images, filtered_targets)
             losses = sum(loss for loss in loss_dict.values())
         # Reduce losses across GPUs
         loss_dict_reduced = utils.reduce_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
         loss_value = losses_reduced.item()
+
+        # Update all metrics
+        metric_logger.update(
+            loss=losses_reduced,
+            loss_classifier=loss_dict_reduced['loss_classifier'],
+            loss_box_reg=loss_dict_reduced['loss_box_reg'],
+            lr=optimizer.param_groups[0]["lr"])
+
         # Check for invalid loss
         if not math.isfinite(loss_value):
             logging.error(f"Loss is {loss_value}, stopping training")
@@ -79,22 +87,26 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch: int,
         else:
             losses.backward()
             optimizer.step()
-        # Update learning rate scheduler
-        if lr_scheduler is not None:
-            lr_scheduler.step()
-        # Update metrics
-        metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
-        metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+
         # Update progress bar
-        pbar.set_postfix({'loss': f'{loss_value:.4f}', 'lr': f'{optimizer.param_groups[0]["lr"]:.6f}'})
+        pbar.set_postfix({
+            'loss': f'{loss_value:.4f}',
+            'lr': f'{optimizer.param_groups[0]["lr"]:.6f}'
+        })
         pbar.update(1)
-        # Detailed logging is done every print_freq iteration
+        # Detailed logging
         if pbar.n % print_freq == 0:
             logging.info(f"{header} [{pbar.n}/{len(data_loader)}] "
                         f"Loss: {loss_value:.4f} "
                         f"LR: {optimizer.param_groups[0]['lr']:.6f}")
     pbar.close()
     logging.info(f"Epoch [{epoch}] completed. Average loss: {metric_logger.loss.global_avg:.4f}")
+
+    # if writer:
+    #     writer.add_scalar('Loss/train', metric_logger.loss.global_avg, epoch)
+    #     writer.add_scalar('Cls Loss/train', metric_logger.loss_classifier.global_avg, epoch)
+    #     writer.add_scalar('Reg. Loss/train', metric_logger.loss_box_reg.global_avg, epoch)
+    #     writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
     return metric_logger
 
 
@@ -122,66 +134,73 @@ def _get_iou_types(model):
     return iou_types
 
 @torch.inference_mode()
-def evaluate(model, data_loader, global_step, device, writer=None):
-    """
-    Evaluate model performance using COCO metrics
-    
-    Args:
-        model: PyTorch detection model
-        data_loader: Validation/test data loader
-        device: Evaluation device
-        writer: Optional tensorboard writer
-        
-    Returns:
-        CocoEvaluator: Evaluation results
-        
-    Time Complexity: O(N * B) where N = len(data_loader), B = batch_size
-    Space Complexity: O(B + R) where R = results storage size
-    """
-    # Configure thread settings
+def evaluate(model, data_loader, device, global_step=None, writer=None):
     n_threads = torch.get_num_threads()
     torch.set_num_threads(1)
     cpu_device = torch.device("cpu")
-    model.eval()
-    # Initialize metrics and evaluator
-    metric_logger = utils.MetricLogger(delimiter="  ")
-    header = "Test"
+    val_loss, val_cls_loss, val_reg_loss = 0.0, 0.0, 0.0 # Initialize loss accumulators
+    metric_logger = utils.MetricLogger(delimiter="  ") # Initialize metric logger
+    if len(data_loader) == 0:
+        logging.warning("Validation dataset is empty!")
+        return None, metric_logger
+    header = "Validation" if writer else "Test"
     logging.info("Starting evaluation")
     coco = get_coco_api_from_dataset(data_loader.dataset)
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types, writer=writer)
-    # Evaluation loop with progress bar
+
+    """Evaluation loop with progress bar"""
     pbar = tqdm(total=len(data_loader), desc=header, leave=True)
-    for images, targets, _ in data_loader:
+    for i, (images, targets, _, masks) in enumerate(data_loader):
         images = list(img.to(device) for img in images)
-        # Synchronize CUDA operations
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
-        # Model inference
-        model_time = time.time()
+        targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v 
+                   for k, v in t.items()} for t in targets]
+        masks = list(mask.to(device) for mask in masks)
+        filtered_targets = filter_by_mask(targets, masks)
+        model.eval()
         outputs = model(images)
         outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
-        model_time = time.time() - model_time
-        # Update evaluator
-        res = {target["image_id"]: output for target, output in zip(targets, outputs)}
-        evaluator_time = time.time()
-        coco_evaluator.update(res)
-        evaluator_time = time.time() - evaluator_time
-         # Update metrics
-        metric_logger.update(model_time=model_time, evaluator_time=evaluator_time)
-        # Update progress bar
-        pbar.set_postfix({
-            'model_time': f'{model_time:.4f}s',
-            'evaluator_time': f'{evaluator_time:.4f}s'
-        })
+        model.train()
+        loss_dict = model(images, filtered_targets) # Compute loss
+        model.eval()
+        losses = sum(loss for loss in loss_dict.values())
+        val_loss += losses.item()
+        val_cls_loss += loss_dict['loss_classifier'].item()
+        val_reg_loss += loss_dict['loss_box_reg'].item()
+        metric_logger.update( # Update metrics
+            loss=losses.item(),
+            loss_classifier=loss_dict['loss_classifier'].item(),
+            loss_box_reg=loss_dict['loss_box_reg'].item())
+        
+        if i == len(data_loader) - 1: # Update progress bar
+            avg_val_loss = val_loss / len(data_loader)
+            avg_val_cls = val_cls_loss / len(data_loader)
+            avg_val_reg = val_reg_loss / len(data_loader)
+            pbar.set_postfix({
+                'avg_val_loss': f'{avg_val_loss:.4f}',
+                'cls_loss': f'{avg_val_cls:.4f}',
+                'reg_loss': f'{avg_val_reg:.4f}',
+                'batch': f'{i+1}/{len(data_loader)}'})
+        res = {target["image_id"]: output for target, output # Update evaluator
+               in zip(filtered_targets, outputs) if "image_id" in target}
+        if res:
+            coco_evaluator.update(res)
+        else:
+            raise KeyError("Warning: Empty detection results for current batch")
         pbar.update(1)
     pbar.close()
-    # Synchronize and accumulate results
-    metric_logger.synchronize_between_processes()
+
+    metric_logger.synchronize_between_processes() # Synchronize and accumulate results
     logging.info("Averaged stats: %s", metric_logger)
     coco_evaluator.synchronize_between_processes()
     coco_evaluator.accumulate()
-    # coco_evaluator.summarize()
-    # Restore thread settings
-    torch.set_num_threads(n_threads)
-    return coco_evaluator
+    
+    avg_val_loss = val_loss / len(data_loader) # Compute average losses
+    avg_val_cls = val_cls_loss / len(data_loader)
+    avg_val_reg = val_reg_loss / len(data_loader)
+    if writer and global_step is not None: # Log metrics to tensorboard
+        writer.add_scalar('Loss/val', avg_val_loss, global_step)
+        writer.add_scalar('Cls Loss/val', avg_val_cls, global_step)
+        writer.add_scalar('Reg. Loss/val', avg_val_reg, global_step)
+    torch.set_num_threads(n_threads) # Restore thread settings
+    return coco_evaluator, metric_logger
