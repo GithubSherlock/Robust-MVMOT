@@ -150,14 +150,14 @@ class CocoEvaluator:
             logging.info(f"\n{'='*20} Evaluation Results ({iou_type}) {'='*20}")
             if global_step is not None:
                 logging.info(f"Global Step: {global_step}")
-            logging.info("\nAverage Precision:") # AP 指标记录
+            logging.info("\nAverage Precision:") # Log AP metrics
             logging.info(f"    Average Precision @[ IoU=0.50:0.95 ] = {stats[0]:.3f}")
             logging.info(f"    Average Precision @[ IoU=0.50      ] = {stats[1]:.3f}")
             logging.info(f"    Average Precision @[ IoU=0.75      ] = {stats[2]:.3f}")
             logging.info(f"    Average Precision @[ small  objects] = {stats[3]:.3f}")
             logging.info(f"    Average Precision @[ medium objects] = {stats[4]:.3f}")
             logging.info(f"    Average Precision @[ large  objects] = {stats[5]:.3f}")
-            logging.info("\nAverage Recall:") # AR 指标记录
+            logging.info("\nAverage Recall:") #Log AR metrics
             logging.info(f"    Average Recall @[ max dets=1    ] = {stats[6]:.3f}")
             logging.info(f"    Average Recall @[ max dets=10   ] = {stats[7]:.3f}")
             logging.info(f"    Average Recall @[ max dets=100  ] = {stats[8]:.3f}")
@@ -185,7 +185,6 @@ class CocoEvaluator:
             boxes = convert_to_xywh(boxes).tolist()
             scores = prediction["scores"].tolist()
             labels = prediction["labels"].tolist()
-
             coco_results.extend(
                 [
                     {
