@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from pytorch_metric_learning.losses import SupConLoss
 from evaluation.mAP_nuscenes import NuscenesDetectionEvaluator
 from models import MVDet, Segnet, SplitSegnet,Segnet_e, Segnet_e_2
@@ -31,7 +31,7 @@ class WorldTrackModel(pl.LightningModule):
             depth=(100, 2.0, 25),
             scene_centroid=(0.0, 0.0, 0.0),
             max_detections=60,
-            conf_threshold=0.4,
+            conf_threshold=0.4, # CONF
             gating_threshold=1000,
             experiment_name=None,
             kwargs=None,
@@ -412,6 +412,68 @@ class WorldTrackModel(pl.LightningModule):
                                     'detection_name': 'pedestrian', 'detection_score': 1,
                                     'attribute_name': ''}
                 self.mAP_results_gt[str(frame)].append(sample_result_gt)
+    
+    def prediction_step(self, batch):
+        """执行模型预测步骤,返回检测和跟踪结果
+        
+        Args:
+            batch: 输入数据batch,包含图像和相机参数等信息
+            
+        Returns:
+            dict: 包含以下预测结果:
+                - boxes: 检测框坐标 [x,y,w,h]
+                - scores: 置信度分数
+                - track_ids: 跟踪ID
+                - global_xyz: 全局坐标系下的3D位置
+        """
+        # 解包输入数据
+        item, _ = batch
+        
+        # 前向传播获取模型输出
+        output = self(item)
+        
+        # 获取参考坐标系到全局坐标系的变换矩阵
+        ref_T_global = item['ref_T_global'] 
+        global_T_ref = torch.inverse(ref_T_global)
+
+        # 解析BEV平面上的检测结果
+        center_e = output['instance_center']
+        offset_e = output['instance_offset'] 
+        size_e = output['instance_size']
+        rot_e = output['instance_rot']
+        id_e = output['instance_id_feat']
+
+        # 解码得到具体的检测框参数
+        xy_e, scores_e, ids_e, sizes_e, _ = decode.decoder(
+            basic._sigmoid(center_e), 
+            offset_e,
+            size_e,
+            id_e,
+            rz_e=rot_e,
+            K=self.max_detections
+        )
+
+        # 将内存坐标转换到参考坐标系
+        mem_xyz = torch.cat((xy_e, torch.zeros_like(scores_e)), dim=2)  # [B,K,3]
+        ref_xyz = self.vox_util.Mem2Ref(mem_xyz, self.Y, self.Z, self.X)
+        
+        # 转换到全局坐标系
+        global_xyz = torch.matmul(global_T_ref[0, :3, :3], ref_xyz.transpose(1, 2)).transpose(1, 2)
+        
+        # 应用置信度阈值过滤
+        valid_mask = scores_e.squeeze(-1) > self.conf_threshold
+        
+        # 封装预测结果
+        results = {
+            'boxes': xy_e[valid_mask],  # 检测框 [x,y]
+            'scores': scores_e[valid_mask],  # 置信度
+            'track_ids': ids_e[valid_mask],  # 跟踪ID  
+            'sizes': sizes_e[valid_mask],  # 目标尺寸
+            'global_xyz': global_xyz[valid_mask]  # 全局3D坐标
+        }
+        
+        return results
+
 
     def on_test_epoch_end(self):
         log_dir = self.trainer.log_dir if self.trainer.log_dir is not None else '../data/cache'
