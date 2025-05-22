@@ -53,5 +53,43 @@ def yosinski_optimizer(learning_rate, model):
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
     return optimizer, lr_scheduler
 
+def _get_valid_indices_(boxes, mask):
+    if mask.dim() > 2:
+        mask = mask.squeeze(0)
+    # 计算边界框中心点
+    fit_points = torch.stack([(boxes[:, 0] + boxes[:, 2])/2, boxes[:, 3]], dim=1)
+    # 获取中心点处的mask值并过滤
+    valid_indices = []
+    # print(f"Mask shape: {mask.shape}")
+    # print(f"Mask value range: {mask.min()}-{mask.max()}")
+    for fit_point in fit_points:
+        x, y = fit_point.long()
+        if (0 <= x < mask.shape[1] and 0 <= y < mask.shape[0] and mask[y, x] == 1):
+            # mask_value = mask[y, x].item()
+            # print(f"Mask value at ({x},{y}): {mask_value}")
+            valid_indices.append(True)
+        else:
+            valid_indices.append(False)
+    # 只保留有效的目标
+    valid_indices = torch.tensor(valid_indices, dtype=torch.bool, device=boxes.device)
+    return valid_indices
+
+def filter_by_mask(targets, masks):
+    filtered_targets = []
+    for batch_idx, (target, mask) in enumerate(zip(targets, masks)):
+        boxes = target['boxes']
+        # print(f"Before filtering: {len(boxes)} targets")
+        # print(f"Mask valid area: {(mask == 1).float().mean().item():.2%}")
+        valid_indices = _get_valid_indices_(boxes, mask)
+        filtered_target = {
+            'boxes': boxes[valid_indices],
+            'labels': target['labels'][valid_indices],
+            'image_id': target['image_id'] if 'image_id' in target else batch_idx,
+            'area': target['area'][valid_indices] if 'area' in target else None,
+            'iscrowd': target['iscrowd'][valid_indices] if 'iscrowd' in target else None}
+        # print(f"After filtering: {len(filtered_target['boxes'])} targets")
+        filtered_targets.append(filtered_target)
+    return filtered_targets
+
 if __name__ == "__main__":
     pass
