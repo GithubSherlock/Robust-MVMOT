@@ -18,7 +18,7 @@ def build_fasterrcnn_freeze(num_classes=2):
     - layer3, 4: Completely trainable (task-related features)
     - Detection head: Completely trainable
     """
-   model = _base_model_(pretrained=True)
+    model = _base_model_(pretrained=True)
     for param in model.parameters(): # First set all parameters trainable
         param.requires_grad = True
     for name, param in model.named_parameters():
@@ -30,16 +30,45 @@ def build_fasterrcnn_freeze(num_classes=2):
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
 
-def build_fasterrcnn_finetuning(num_classes=2):
-    """Build a fully fine-tuned Faster R-CNN model (all layers trainable)"""
+def build_fasterrcnn_bbfreeze(num_classes=2):
+    """
+    Build a Faster R-CNN model with a backbone-freezed strategy
+    
+    Backbone-freezing strategy:
+    - layer1-4: Completely frozen (basic features)
+    - Detection head: Completely trainable
+    """
     model = _base_model_(pretrained=True)
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    for param in model.parameters(): # First set all parameters trainable
+        param.requires_grad = True
+    for name, param in model.named_parameters():
+        if "backbone" in name: # Freeze all backbone layers
+            param.requires_grad = False
+    in_features = model.roi_heads.box_predictor.cls_score.in_features # Change the detection head
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
 
-def build_fasterrcnn_from_scratch(num_classes=2):
-    """Build a Faster R-CNN model trained from scratch (no pre-training)"""
-    model = _base_model_(pretrained=False)
+def build_fasterrcnn_superfreeze(num_classes=2):
+    """
+    Build a Faster R-CNN model with a super-frozen strategy
+    
+    Super-freezing strategy:
+    - layer1-4 and RPN head: Completely frozen (basic features)
+    - Detection head: Completely trainable
+    """
+    model = _base_model_(pretrained=True)
+    for param in model.parameters(): # First set all parameters trainable
+        param.requires_grad = True
+    for name, param in model.named_parameters():
+        if "backbone" in name or "rpn.head" in name: # Freeze all backbone layers and RPN head
+            param.requires_grad = False
+    in_features = model.roi_heads.box_predictor.cls_score.in_features # Change the detection head
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    return model
+
+def build_fasterrcnn_finetuning(num_classes=2):
+    """Build a fully fine-tuned Faster R-CNN model (all layers trainable)"""
+    model = _base_model_(pretrained=True)
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     return model
@@ -54,5 +83,6 @@ if __name__ == "__main__":
     base_model = _base_model_()
     freezed_model = build_fasterrcnn_freeze()
     finetune_model = build_fasterrcnn_finetuning()
-    scratch_model = build_fasterrcnn_from_scratch()
-    print_model_params_state(freezed_model) # Check parameter freezing status
+    bbfreezed_model = build_fasterrcnn_bbfreeze()
+    superfreezed_model = build_fasterrcnn_superfreeze()
+    print_model_params_state(base_model) # Check parameter freezing status
