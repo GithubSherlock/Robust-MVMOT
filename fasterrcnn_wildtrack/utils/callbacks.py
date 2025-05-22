@@ -42,13 +42,12 @@ class CheckpointManager:
         self.best_model_path = None
         self.best_map = float('-inf')
         os.makedirs(self.checkpoints_dir, exist_ok=True)
-    
     def save_checkpoint(self, model, optimizer, lr_scheduler, epoch: int, mAP: float) -> str:
         """
         Save model checkpoint and return save path
         
         Args:
-            model: PyTorch model (可能是 DataParallel 或普通模型)
+            model: PyTorch model
             optimizer: Model optimizer
             lr_scheduler: Learning rate scheduler
             epoch: Current epoch number
@@ -60,26 +59,21 @@ class CheckpointManager:
         Time Complexity: O(model_size)
         Space Complexity: O(model_size)
         """
-        # 检查是否为DataParallel模型
-        model_state_dict = model.module.state_dict() if isinstance(model, torch.nn.DataParallel) else model.state_dict()
-        
+        if mAP <= self.best_map:
+            return None        
         checkpoint = {
             'epoch': epoch,
-            'model_state_dict': model_state_dict,
+            'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'lr_scheduler_state_dict': lr_scheduler.state_dict() if lr_scheduler else None,
-            'map': mAP,
-            'is_parallel': isinstance(model, torch.nn.DataParallel)  # 记录是否为多GPU模型
-        }
-        
+            'map': mAP}
         checkpoint_name = f'checkpoint_epoch_{epoch}_map_{mAP:.4f}.pth'
         checkpoint_path = os.path.join(self.checkpoints_dir, checkpoint_name)
-        
-        # 保存检查点
         torch.save(checkpoint, checkpoint_path)
-        logging.info(f'Saved checkpoint: {checkpoint_name}')
-        logging.info(f'Model type: {"Multi-GPU" if isinstance(model, torch.nn.DataParallel) else "Single-GPU"}')
+        logging.info(f'Saved checkpoint: {checkpoint_name} (New best mAP: {mAP:.4f})')
         
+        self.best_map = mAP
+        self.best_model_path = checkpoint_path
         return checkpoint_path
     
     def update_checkpoints(self, checkpoint_path: str, current_map: float):
@@ -92,23 +86,17 @@ class CheckpointManager:
             
         Time Complexity: O(max_checkpoints) for cleanup
         Space Complexity: O(1)
-        """
-        self.last_model_path = checkpoint_path
-        if current_map > self.best_map: # Update best model if current mAP is higher
-            self.best_map = current_map
-            self.best_model_path = checkpoint_path
-            logging.info(f'New best model with mAP: {current_map:.4f}')
-        
-        self.saved_checkpoints.append(checkpoint_path)
-        # Keep only recent checkpoints while preserving best model
-        while len(self.saved_checkpoints) > self.max_checkpoints:
-            old_path = self.saved_checkpoints.pop(0)
-            if os.path.exists(old_path) and old_path != self.best_model_path:
-                os.remove(old_path)
+        """    
+        if checkpoint_path is not None:
+            self.saved_checkpoints.append(checkpoint_path)
+            if len(self.saved_checkpoints) > self.max_checkpoints:
+                oldest_checkpoint = self.saved_checkpoints.pop(0)
+                if os.path.exists(oldest_checkpoint):
+                    os.remove(oldest_checkpoint)
         
         if self.save_nodes: # Manage node checkpoints if enabled
             self.node_checkpoints.append(checkpoint_path)
-            # 仅保留最新的max_nodes个节点模型
+            # Keep only the most recent max_nodes node model
             while len(self.node_checkpoints) > self.max_nodes:
                 old_node = self.node_checkpoints.pop(0)
                 if os.path.exists(old_node):
