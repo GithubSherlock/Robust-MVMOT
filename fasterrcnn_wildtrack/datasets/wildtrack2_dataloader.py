@@ -17,7 +17,16 @@ def get_transform(train):
     """
     transforms = []
     if train:
-        transforms.append(T.RandomHorizontalFlip(0.5))
+        transforms.extend([ # Data augmentation
+            # T.RandomShortestSize(min_size=800, max_size=1333, antialias=True), # Base scale adjustment
+            T.RandomHorizontalFlip(p=0.5), # Random Horizontal Flip
+            # T.RandomApply([T.RandomIoUCrop(min_scale=0.3, max_scale=1.0, min_aspect_ratio=0.5,
+            #                                max_aspect_ratio=2.0,sampler_options={'min_iou': 0.3})], p=0.7), # Random trimming
+            # T.RandomPhotometricDistort(brightness=(0.8, 1.2), contrast=(0.8, 1.2),saturation=(0.8, 1.2),
+            #                            hue=(-0.1, 0.1), p=0.5), # Random photometric transformation
+            # T.RandomApply([T.GaussianBlur(kernel_size=(3, 3), sigma=(0.1, 2.0))], p=0.3), # Random blur
+            # T.RandomZoomOut(fill={0: (124, 116, 104)}, side_range=(1.0, 1.5), p=0.3) # Random Expanded View
+            ])
     transforms.extend([
         T.ToDtype(torch.float, scale=True),
         T.Normalize(mean=[0.485, 0.456, 0.406], 
@@ -33,15 +42,8 @@ class TransformSubset(torch.utils.data.Subset):
     def __getitem__(self, idx):
         try:
             img, target, img_name, mask = self.dataset[self.indices[idx]]
-            print(f"Original image - type: {type(img)}")
-            if isinstance(img, torch.Tensor):
-                print(f"Original tensor - dtype: {img.dtype}, shape: {img.shape}")
             if self.transform is not None:
                 img, target, mask = self.transform(img, target, mask)
-                for t in self.transform.transforms:
-                    img = t(img)
-                    print(f"After {t.__class__.__name__} - dtype: {img.dtype}, "
-                        f"shape: {img.shape}, range: [{img.min():.3f}, {img.max():.3f}]")
             return img, target, img_name, mask
         except Exception as e:
             logging.error(f"Error loading image at index {idx}: {str(e)}")
