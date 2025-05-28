@@ -14,11 +14,11 @@ import torch
 import torchvision.models.detection.mask_rcnn
 from tqdm import tqdm
 from utils import utils
-from models.optimizer import filter_by_mask
 from utils.coco_eval import CocoEvaluator
 from utils.coco_utils import get_coco_api_from_dataset
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch: int, print_freq: int, writer=None, scaler=None):
+def train_one_epoch(model, optimizer, lr_scheduler, data_loader, device,
+                    epoch: int, print_freq: int, writer=None, scaler=None):
     """
     Train model for one epoch with progress tracking and logging
     
@@ -53,14 +53,17 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch: int, print_fre
     pbar = tqdm(total=len(data_loader), desc=header, leave=True)
     for images, targets, _, masks in data_loader:
         images = list(image.to(device) for image in images)
+        # targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
+        # masks = list(mask.to(device) for mask in masks)
+        for target, mask in zip(targets, masks):
+            target["mask"] = mask
         targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
-        masks = list(mask.to(device) for mask in masks)
-        filtered_targets = filter_by_mask(targets, masks)
-
+        ############################################
         # Forward pass with optional mixed precision
         with torch.cuda.amp.autocast(enabled=scaler is not None):
-            loss_dict = model(images, filtered_targets)
+            loss_dict = model(images, targets)
             losses = sum(loss for loss in loss_dict.values())
+        ############################################
         # Reduce losses across GPUs
         loss_dict_reduced = utils.reduce_dict(loss_dict)
         losses_reduced = sum(loss for loss in loss_dict_reduced.values())
@@ -91,8 +94,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch: int, print_fre
         # Update progress bar
         pbar.set_postfix({
             'loss': f'{loss_value:.4f}',
-            'lr': f'{optimizer.param_groups[0]["lr"]:.6f}'
-        })
+            'lr': f'{optimizer.param_groups[0]["lr"]:.6f}'})
         pbar.update(1)
         # Detailed logging
         if pbar.n % print_freq == 0:
@@ -102,11 +104,13 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch: int, print_fre
     pbar.close()
     logging.info(f"Epoch [{epoch}] completed. Average loss: {metric_logger.loss.global_avg:.4f}")
 
-    # if writer:
-    #     writer.add_scalar('Loss/train', metric_logger.loss.global_avg, epoch)
-    #     writer.add_scalar('Cls Loss/train', metric_logger.loss_classifier.global_avg, epoch)
-    #     writer.add_scalar('Reg. Loss/train', metric_logger.loss_box_reg.global_avg, epoch)
-    #     writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
+    if writer:
+        writer.add_scalar('Loss/train', metric_logger.loss.global_avg, epoch)
+        writer.add_scalar('Cls Loss/train', metric_logger.loss_classifier.global_avg, epoch)
+        writer.add_scalar('Reg. Loss/train', metric_logger.loss_box_reg.global_avg, epoch)
+        writer.add_scalar('Learning Rate', optimizer.param_groups[0]['lr'], epoch)
+    if epoch > 0:
+            lr_scheduler.step()
     return metric_logger
 
 
@@ -144,7 +148,7 @@ def evaluate(model, data_loader, device, global_step=None, writer=None):
         logging.warning("Validation dataset is empty!")
         return None, metric_logger
     header = "Validation" if writer else "Test"
-    logging.info("Starting evaluation")
+    logging.info("Starting evaluation ...")
     coco = get_coco_api_from_dataset(data_loader.dataset)
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types, writer=writer)
@@ -152,17 +156,20 @@ def evaluate(model, data_loader, device, global_step=None, writer=None):
     """Evaluation loop with progress bar"""
     pbar = tqdm(total=len(data_loader), desc=header, leave=True)
     for i, (images, targets, _, masks) in enumerate(data_loader):
-        images = list(img.to(device) for img in images)
-        targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v 
-                   for k, v in t.items()} for t in targets]
-        masks = list(mask.to(device) for mask in masks)
-        filtered_targets = filter_by_mask(targets, masks)
+        images = list(image.to(device) for image in images)
+        # targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
+        # masks = list(mask.to(device) for mask in masks)
+        for target, mask in zip(targets, masks):
+            target["mask"] = mask
+        targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
+        ############################################
         model.eval()
         outputs = model(images)
         outputs = [{k: v.to(cpu_device) for k, v in t.items()} for t in outputs]
         model.train()
-        loss_dict = model(images, filtered_targets) # Compute loss
+        loss_dict = model(images, targets) # Compute loss
         model.eval()
+        ############################################
         losses = sum(loss for loss in loss_dict.values())
         val_loss += losses.item()
         val_cls_loss += loss_dict['loss_classifier'].item()
@@ -182,7 +189,7 @@ def evaluate(model, data_loader, device, global_step=None, writer=None):
                 'reg_loss': f'{avg_val_reg:.4f}',
                 'batch': f'{i+1}/{len(data_loader)}'})
         res = {target["image_id"]: output for target, output # Update evaluator
-               in zip(filtered_targets, outputs) if "image_id" in target}
+               in zip(targets, outputs) if "image_id" in target}
         if res:
             coco_evaluator.update(res)
         else:
