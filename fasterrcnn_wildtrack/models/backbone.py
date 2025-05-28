@@ -1,76 +1,62 @@
 import torchvision
 from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.backbone_utils import resnet_fpn_backbone
+
+from models.custom_faster_rcnn import CustomFasterRCNN
+
 
 def _base_model_(pretrained=True):
     """Build the base model"""
     weight = FasterRCNN_ResNet50_FPN_Weights.DEFAULT if pretrained else None
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights=weight)
+
     return model
 
-def build_fasterrcnn_freeze(num_classes=2):
+def resnet_backbone(weights_name="resnet50", pretrained=True):
     """
-    Build a Faster R-CNN model with a scientific layered freezing strategy
-    
-    Freezing strategy:
-    - layer1: Completely frozen (basic features)
-    - layer2: First two blocks frozen, last block trainable
-    - layer3, 4: Completely trainable (task-related features)
-    - Detection head: Completely trainable
+    创建带FPN的backbone
+    Args:
+        weights: resnet18, resnet34, resnet50, resnet101
+        pretrained: 是否使用预训练权重
     """
-    model = _base_model_(pretrained=True)
-    for param in model.parameters(): # First set all parameters trainable
+    WEIGHTS_MAP = {
+        "resnet18": torchvision.models.ResNet18_Weights.IMAGENET1K_V1,
+        "resnet34": torchvision.models.ResNet34_Weights.IMAGENET1K_V1,
+        "resnet50": torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
+        "resnet101": torchvision.models.ResNet101_Weights.IMAGENET1K_V1}
+    backbone_weights = WEIGHTS_MAP[weights_name] if pretrained else None
+
+    return resnet_fpn_backbone(
+        backbone_name=weights_name,
+        weights=backbone_weights,
+        trainable_layers=3)  # Value of trainable layers: 1,2,3,4,5
+
+def build_fasterrcnn_model(weights_name="resnet50", num_classes=2, pretrained=True):
+    WEIGHTS_MAP = {"fasterrcnn_resnet50_fpn": FasterRCNN_ResNet50_FPN_Weights.COCO_V1,
+        "fasterrcnn_resnet50_fpn_v2": FasterRCNN_ResNet50_FPN_Weights.COCO_V1}
+    if weights_name in WEIGHTS_MAP: # Choose backbone with FPN
+        pretrained_model = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+            weights=WEIGHTS_MAP[weights_name] if pretrained else None)
+        backbone = pretrained_model.backbone # Based on COCO dataset
+    elif weights_name in ["resnet18", "resnet34", "resnet50", "resnet101"]:
+        backbone = resnet_backbone(weights_name=weights_name, pretrained=pretrained) # Based on ImageNet1K dataset
+    else:
+        raise ValueError(f"Unsupported weights type: {weights_name}")
+
+    model = CustomFasterRCNN(backbone=backbone, num_classes=num_classes)
+    freeze_layers = { # Freeze strategy based on the weights type
+        "resnet18": ["conv1", "layer1"],
+        "resnet34": ["conv1", "layer1"],
+        "resnet50": ["conv1", "layer1", "layer2.0", "layer2.1"],
+        "fasterrcnn_resnet50_fpn": ["conv1", "layer1", "layer2.0", "layer2.1"],
+        "fasterrcnn_resnet50_fpn_v2": ["conv1", "layer1", "layer2.0", "layer2.1"],
+        "resnet101": ["conv1", "layer1", "layer2.0", "layer2.1"]}
+    for name, param in model.named_parameters(): # Freeze specific layers based on the weights type
         param.requires_grad = True
-    for name, param in model.named_parameters():
-        if "backbone.body.conv1" in name or "backbone.body.layer1" in name: # Freeze the layer1
-            param.requires_grad = False
-        if "backbone.body.layer2.0" in name or "backbone.body.layer2.1" in name: # Freeze the first two blocks of layer2
-            param.requires_grad = False
-    in_features = model.roi_heads.box_predictor.cls_score.in_features # Change the detection head
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    return model
-
-def build_fasterrcnn_bbfreeze(num_classes=2):
-    """
-    Build a Faster R-CNN model with a backbone-freezed strategy
-    
-    Backbone-freezing strategy:
-    - layer1-4: Completely frozen (basic features)
-    - Detection head: Completely trainable
-    """
-    model = _base_model_(pretrained=True)
-    for param in model.parameters(): # First set all parameters trainable
-        param.requires_grad = True
-    for name, param in model.named_parameters():
-        if "backbone" in name: # Freeze all backbone layers
-            param.requires_grad = False
-    in_features = model.roi_heads.box_predictor.cls_score.in_features # Change the detection head
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    return model
-
-def build_fasterrcnn_superfreeze(num_classes=2):
-    """
-    Build a Faster R-CNN model with a super-frozen strategy
-    
-    Super-freezing strategy:
-    - layer1-4 and RPN head: Completely frozen (basic features)
-    - Detection head: Completely trainable
-    """
-    model = _base_model_(pretrained=True)
-    for param in model.parameters(): # First set all parameters trainable
-        param.requires_grad = True
-    for name, param in model.named_parameters():
-        if "backbone" in name or "rpn.head" in name: # Freeze all backbone layers and RPN head
-            param.requires_grad = False
-    in_features = model.roi_heads.box_predictor.cls_score.in_features # Change the detection head
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    return model
-
-def build_fasterrcnn_finetuning(num_classes=2):
-    """Build a fully fine-tuned Faster R-CNN model (all layers trainable)"""
-    model = _base_model_(pretrained=True)
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+        for layer in freeze_layers[weights_name]:
+            if f"backbone.body.{layer}" in name:
+                param.requires_grad = False
     return model
 
 def print_model_params_state(model):
@@ -79,10 +65,6 @@ def print_model_params_state(model):
         print(f"{name}: {param.requires_grad}")
 
 if __name__ == "__main__":
-    # Create different models for comparative experiments
-    base_model = _base_model_()
-    freezed_model = build_fasterrcnn_freeze()
-    finetune_model = build_fasterrcnn_finetuning()
-    bbfreezed_model = build_fasterrcnn_bbfreeze()
-    superfreezed_model = build_fasterrcnn_superfreeze()
-    print_model_params_state(base_model) # Check parameter freezing status
+    base_model = _base_model_() # Create different models for comparative experiments
+    model = build_fasterrcnn_model()
+    print_model_params_state(model) # Check parameter freezing status
