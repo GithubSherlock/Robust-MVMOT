@@ -1,5 +1,4 @@
 import torch
-import logging
 import torchvision.transforms.v2 as T
 from torch.utils.data import DataLoader
 from .wildtrack2_datasets import WildtrackDataset
@@ -46,8 +45,7 @@ class TransformSubset(torch.utils.data.Subset):
                 img, target, mask = self.transform(img, target, mask)
             return img, target, img_name, mask
         except Exception as e:
-            logging.error(f"Error loading image at index {idx}: {str(e)}")
-            raise
+            raise KeyError(f"Error loading image at index {idx}: {str(e)}")
 
 def create_wildtrack_dataloaders(root_path, batch_size=4, num_workers=4):
     """
