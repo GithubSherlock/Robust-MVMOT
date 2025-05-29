@@ -45,16 +45,11 @@ class CustomRoIHeads(RoIHeads):
                     bottom_center_x = (props[:, 0] + props[:, 2]) / 2 # Use fit point
                     bottom_center_y = props[:, 3]
                     
-                    # 转换为掩码坐标
-                    h, w = mask.shape[-2:]
+                    h, w = mask.shape[-2:] # Convert to mask coordinates
                     x_idx = (bottom_center_x * w).long().clamp(0, w-1)
                     y_idx = (bottom_center_y * h).long().clamp(0, h-1)
-                    
-                    # 在白色区域(mask值为1)的保留
-                    valid_mask = mask[0, 0, y_idx, x_idx] > 0
-                    
-                    # 防护措施
-                    if valid_mask.sum() == 0:
+                    valid_mask = mask[0, 0, y_idx, x_idx] > 0 # Retention in white areas (mask value 1)
+                    if valid_mask.sum() == 0: # Hedge
                         valid_mask[0] = True
                         logging.warning("Warning: No valid proposals after mask filtering, keeping one proposal")
 
@@ -68,8 +63,7 @@ class CustomRoIHeads(RoIHeads):
                 labels = valid_labels
                 regression_targets = valid_regression_targets
 
-        # 提取RoI特征
-        box_features = self.box_roi_pool(features, proposals, image_shapes)
+        box_features = self.box_roi_pool(features, proposals, image_shapes) # Extract RoI features
         box_features = self.box_head(box_features)
         class_logits, box_regression = self.box_predictor(box_features)
 
@@ -84,8 +78,7 @@ class CustomRoIHeads(RoIHeads):
             boxes, scores, labels = self.postprocess_detections(
                 class_logits, box_regression, proposals, image_shapes)
             
-            # 推理阶段的掩码过滤
-            if targets is not None and all("mask" in t for t in targets):
+            if targets is not None and all("mask" in t for t in targets): # Mask filtering in the inference step
                 masks = [t["mask"] for t in targets]
                 filtered_boxes = []
                 filtered_scores = []
