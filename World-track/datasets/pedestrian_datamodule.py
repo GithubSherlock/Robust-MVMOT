@@ -12,7 +12,7 @@ from datasets.pedestrian_dataset_cam_dropout import PedestrianDatasetCamDropout
 class PedestrianDataModule(pl.LightningDataModule):
     def __init__(
             self,
-            data_dir: str = "../data/MultiviewX",
+            data_dir: str = "/home/s-jiang/Documents/datasets/Wildtrack",
             batch_size: int = 1,
             num_workers: int = 4,
             train_cameras=(),
@@ -54,6 +54,7 @@ class PedestrianDataModule(pl.LightningDataModule):
                 self.data_train = PedestrianDataset(
                     base,
                     is_train=True,
+                    # split='train',
                     resolution=self.resolution,
                     bounds=self.bounds,
                 )
@@ -61,6 +62,7 @@ class PedestrianDataModule(pl.LightningDataModule):
                 self.data_train = PedestrianDatasetCamDropout(
                     base,
                     is_train=True,
+                    # split='train',
                     resolution=self.resolution,
                     bounds=self.bounds,
                     # num_cameras=self.kwargs['num_cameras'],
@@ -71,6 +73,7 @@ class PedestrianDataModule(pl.LightningDataModule):
                 self.data_val = PedestrianDataset(
                     base,
                     is_train=False,
+                    # split='val',
                     resolution=self.resolution,
                     bounds=self.bounds,
                 )
@@ -78,6 +81,7 @@ class PedestrianDataModule(pl.LightningDataModule):
                 self.data_val = PedestrianDatasetCamDropout(
                     base,
                     is_train=False,
+                    # split='val',
                     resolution=self.resolution,
                     bounds=self.bounds,
                     # num_cameras=self.kwargs['num_cameras'],
@@ -93,6 +97,7 @@ class PedestrianDataModule(pl.LightningDataModule):
                     base,
                     is_train=False,
                     is_testing=True,
+                    # split='test',
                     resolution=self.resolution,
                     bounds=self.bounds
                 )
@@ -101,6 +106,7 @@ class PedestrianDataModule(pl.LightningDataModule):
                     base,
                     is_train=False,
                     is_testing=True,
+                    # split='test',
                     resolution=self.resolution,
                     bounds=self.bounds,
                     # num_cameras=self.kwargs['num_cameras'],
@@ -110,6 +116,8 @@ class PedestrianDataModule(pl.LightningDataModule):
             self.data_predict = PedestrianDataset(
                 base,
                 is_train=False,
+                is_predict=True,  # Add predictive mode sign
+                # split='test',
                 resolution=self.resolution,
                 bounds=self.bounds,
             )
