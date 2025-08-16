@@ -32,7 +32,7 @@ def resnet_backbone(weights_name="resnet50", pretrained=True):
         weights=backbone_weights,
         trainable_layers=3)  # Value of trainable layers: 1,2,3,4,5
 
-def build_fasterrcnn_model(weights_name="resnet50", num_classes=2, pretrained=True):
+def build_fasterrcnn_model(weights_name="resnet18", num_classes=2, pretrained=True):
     WEIGHTS_MAP = {"fasterrcnn_resnet50_fpn": FasterRCNN_ResNet50_FPN_Weights.COCO_V1,
         "fasterrcnn_resnet50_fpn_v2": FasterRCNN_ResNet50_FPN_Weights.COCO_V1}
     if weights_name in WEIGHTS_MAP: # Choose backbone with FPN
@@ -42,16 +42,16 @@ def build_fasterrcnn_model(weights_name="resnet50", num_classes=2, pretrained=Tr
     elif weights_name in ["resnet18", "resnet34", "resnet50", "resnet101"]:
         backbone = resnet_backbone(weights_name=weights_name, pretrained=pretrained) # Based on ImageNet1K dataset
     else:
-        raise ValueError(f"Unsupported weights type: {weights_name}")
+        raise KeyError(f"Unsupported weights type: {weights_name}")
 
     model = CustomFasterRCNN(backbone=backbone, num_classes=num_classes)
     freeze_layers = { # Freeze strategy based on the weights type
-        "resnet18": ["conv1", "layer1"],
-        "resnet34": ["conv1", "layer1"],
-        "resnet50": ["conv1", "layer1", "layer2.0", "layer2.1"],
-        "fasterrcnn_resnet50_fpn": ["conv1", "layer1", "layer2.0", "layer2.1"],
-        "fasterrcnn_resnet50_fpn_v2": ["conv1", "layer1", "layer2.0", "layer2.1"],
-        "resnet101": ["conv1", "layer1", "layer2.0", "layer2.1"]}
+        "resnet18": ["conv1"],
+        "resnet34": ["conv1"],
+        "resnet50": ["conv1"],
+        "fasterrcnn_resnet50_fpn": ["conv1"],
+        "fasterrcnn_resnet50_fpn_v2": ["conv1"],
+        "resnet101": ["conv1"]}
     for name, param in model.named_parameters(): # Freeze specific layers based on the weights type
         param.requires_grad = True
         for layer in freeze_layers[weights_name]:
@@ -59,12 +59,6 @@ def build_fasterrcnn_model(weights_name="resnet50", num_classes=2, pretrained=Tr
                 param.requires_grad = False
     return model
 
-def print_model_params_state(model):
-    """Print the training state of each layer's parameters (for debugging)"""
-    for name, param in model.named_parameters():
-        print(f"{name}: {param.requires_grad}")
-
 if __name__ == "__main__":
-    base_model = _base_model_() # Create different models for comparative experiments
+    # base_model = _base_model_() # Create different models for comparative experiments
     model = build_fasterrcnn_model()
-    print_model_params_state(model) # Check parameter freezing status

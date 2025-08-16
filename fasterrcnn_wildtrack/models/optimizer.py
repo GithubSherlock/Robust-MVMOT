@@ -5,8 +5,8 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
 def yosinski_optimizer(learning_rate, model, num_epochs, scheduler="MultiStepLR"):
     """
         Learning Rate Strategy for Faster R-CNN with ResNet50-FPN Backbone
-
-        This implementation adopts a scientifically-designed differential learning rate strategy based on several key research findings:
+        This implementation adopts a scientifically-designed differential learning rate 
+        strategy based on several key research findings:
 
         1. Backbone High-level Features (Layer3, Layer4) - 0.1x base_lr
         - Based on Yosinski et al. (NIPS 2014) finding that higher layers contain more task-specific features
@@ -37,15 +37,15 @@ def yosinski_optimizer(learning_rate, model, num_epochs, scheduler="MultiStepLR"
     """
     params = []
     params.append({'params': [p for n, p in model.named_parameters() 
-                            if ('backbone.body.layer2.2' in n or 'backbone.body.layer2.3' in n) 
-                            and p.requires_grad],'lr': learning_rate * 0.05})
+                            if ('backbone.body.layer1' in n or 'backbone.body.layer2' in n) 
+                            and p.requires_grad],'lr': learning_rate*0.05}) # 0.05
     params.append({'params': [p for n, p in model.named_parameters() 
                             if ('backbone.body.layer3' in n or 'backbone.body.layer4' in n) 
-                            and p.requires_grad],'lr': learning_rate * 0.1})
+                            and p.requires_grad],'lr': learning_rate*0.1}) # 0.1
     params.append({'params': [p for n, p in model.named_parameters() 
-                            if 'backbone.fpn' in n and p.requires_grad],'lr': learning_rate * 0.5})
+                            if 'backbone.fpn' in n and p.requires_grad],'lr': learning_rate*0.5}) # 0.5
     params.append({'params': [p for n, p in model.named_parameters() 
-                            if ('rpn' in n or 'roi_heads' in n) and p.requires_grad],'lr': learning_rate})
+                            if ('rpn' in n or 'roi_heads' in n) and p.requires_grad],'lr': learning_rate}) # 1.0
     params.append({'params': [p for n, p in model.named_parameters() 
                             if not any(x in n for x in ['backbone', 'rpn', 'roi_heads']) 
                             and p.requires_grad],'lr': learning_rate})
@@ -67,12 +67,12 @@ def yosinski_optimizer(learning_rate, model, num_epochs, scheduler="MultiStepLR"
         lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=gamma)
         logging.info(f"MultiStepLR configured with milestones={milestones}, gamma={gamma}")
     elif scheduler == "CosineAnnealingLR":
-        warmup_epochs = 10
+        warmup_epochs = 5
         start_factor = 0.1
         end_factor = 1.0
         eta_min = 1e-5
         warmup_scheduler = LinearLR(optimizer, start_factor=start_factor, end_factor=end_factor, total_iters=warmup_epochs)
-        cosine_scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs - warmup_epochs, eta_min=eta_min)
+        cosine_scheduler = CosineAnnealingLR(optimizer, T_max=2*(num_epochs-warmup_epochs), eta_min=eta_min)
         lr_scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup_epochs])
         logging.info(f"CosineAnnealingLR configured with warmup_epochs={warmup_epochs}, start_factor={start_factor}, end_factor={end_factor}, eta_min={eta_min}")
     else:

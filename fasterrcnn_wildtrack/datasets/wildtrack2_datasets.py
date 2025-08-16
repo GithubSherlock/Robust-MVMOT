@@ -92,10 +92,11 @@ class WildtrackDataset(torch.utils.data.Dataset):
             "area": area,
             "iscrowd": iscrowd,
             "person_ids": person_ids,
-            "position_ids": position_ids}
+            "position_ids": position_ids,
+            "mask": mask}
 
         if self.transforms is not None: # Apply the transforms
-            img, target = self.transforms(img, target)
+            img, target, mask = self.transforms(img, target, mask)
         if img.dtype == torch.uint8: # Add type checking and conversion
             img = img.float() / 255.0
 
@@ -103,13 +104,10 @@ class WildtrackDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.imgs)
-
-if __name__ == "__main__":
-    ROOT_DIR = "/home/s-jiang/Documents/datasets/Wildtrack2"
-    dataset = WildtrackDataset(ROOT_DIR)
-    # Get first sample
-    img, target, img_name, mask = dataset[1]
     
+def _print_dataset_info(dataset):
+    """Print dataset information"""
+    img, target, img_name, mask = dataset[1] # Get first sample
     # Print sample information
     print(f"Image name: {img_name}")
     print(f"Image size: {img.shape}")
@@ -119,12 +117,18 @@ if __name__ == "__main__":
     print(f"- Bounding box coordinate: {target['boxes'].tolist()}")
     print(f"- Person IDs: {target['person_ids'].tolist()}")
     print(f"- Position IDs: {target['position_ids'].tolist()}")
-    
     # Print related mask info
     print("\nMask info:")
     print(f"- Mask type: {mask.dtype}")
     print(f"- The range of Mask size: [{mask.min()}, {mask.max()}]")
     print(f"- Percentage of labelled regions: {(mask > 0).sum().item() / mask.numel():.2%}")
-    
     # Print dataset size
     print(f"\nTotal sample size of the dataset: {len(dataset)}")
+
+if __name__ == "__main__":
+    ROOT_DIR = "/home/s-jiang/Documents/datasets/Wildtrack2"
+    PRINT_DATASET_INFO = False
+    dataset = WildtrackDataset(ROOT_DIR)
+    while PRINT_DATASET_INFO:
+        _print_dataset_info(dataset)
+        PRINT_DATASET_INFO = False

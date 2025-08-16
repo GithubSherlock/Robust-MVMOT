@@ -27,7 +27,7 @@ def find_model_weights():
             print(f"- {path}")
     return model_pathes
 
-def main(BATCH_SIZE: int, NUM_WORKERS: int, use_pretrained: bool, num_runs: int = 3):
+def main(BATCH_SIZE: int, NUM_WORKERS: int, use_pretrained: bool, num_runs: int = 1):
     data_root = "/home/s-jiang/Documents/datasets/Wildtrack2"
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     vis_params = {
@@ -57,7 +57,7 @@ def main(BATCH_SIZE: int, NUM_WORKERS: int, use_pretrained: bool, num_runs: int 
             predictor = DetectionPredictor(
                 data_root=data_root,
                 model_path=model_path,
-                subset_ratio=0.8,  # Use of 80% of test data 0-1
+                subset_ratio=1,  # Use of 80% of test data 0-1
                 noise_factor=0.05,  # Add 5% Gaussian noise 0.01-0.1
                 device=device,
                 vis_params=vis_params,
@@ -83,5 +83,5 @@ def main(BATCH_SIZE: int, NUM_WORKERS: int, use_pretrained: bool, num_runs: int 
             continue
 
 if __name__ == "__main__":
-    main(BATCH_SIZE=1, NUM_WORKERS=8, use_pretrained=True)
-    # main(BATCH_SIZE=1, NUM_WORKERS=8, use_pretrained=False)
+    # main(BATCH_SIZE=1, NUM_WORKERS=8, use_pretrained=True)
+    main(BATCH_SIZE=1, NUM_WORKERS=8, use_pretrained=False)

@@ -25,9 +25,12 @@ class CustomFasterRCNN(FasterRCNN):
         rpn_post_nms_top_n_train=2000,
         rpn_post_nms_top_n_test=1000,
         rpn_nms_thresh=0.7,
-        rpn_fg_iou_thresh=0.7,
-        rpn_bg_iou_thresh=0.3,
-        rpn_batch_size_per_image=256,
+        # rpn_fg_iou_thresh=0.7,
+        # rpn_bg_iou_thresh=0.3,
+        # rpn_batch_size_per_image=256,
+        rpn_fg_iou_thresh=0.6,
+        rpn_bg_iou_thresh=0.2,
+        rpn_batch_size_per_image=512,
         rpn_positive_fraction=0.5,
         box_roi_pool=None,
         box_head=None,
@@ -45,8 +48,10 @@ class CustomFasterRCNN(FasterRCNN):
             raise ValueError("backbone should contain an out_channels attribute")
         if rpn_anchor_generator is None: # 1. Initialize RPN
             rpn_anchor_generator = AnchorGenerator(
-                sizes=((32, 64, 128, 256, 512),),
-                aspect_ratios=((0.5, 1.0, 2.0),))
+                # sizes=((32, 64, 128, 256, 512),),
+                # aspect_ratios=((0.5, 1.0, 2.0),))
+                sizes=((16, 32, 64, 128, 256, 512),),
+                aspect_ratios=((0.25, 0.5, 1.0, 2.0, 4.0),))
         if rpn_head is None:
             rpn_head = CustomRPNHead(
                 backbone.out_channels,

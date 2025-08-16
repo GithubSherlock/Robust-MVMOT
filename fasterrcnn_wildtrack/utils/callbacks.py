@@ -42,6 +42,7 @@ class CheckpointManager:
         self.best_model_path = None
         self.best_map = float('-inf')
         os.makedirs(self.checkpoints_dir, exist_ok=True)
+
     def save_checkpoint(self, model, optimizer, lr_scheduler, epoch: int, mAP: float) -> str:
         """
         Save model checkpoint and return save path

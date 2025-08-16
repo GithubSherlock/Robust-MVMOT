@@ -13,7 +13,7 @@ from tqdm import tqdm
 from PIL import Image
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
-from models.backbone import _base_model_
+from models.backbone import _base_model_, build_fasterrcnn_model
 
 class DetectionPredictor:
     def __init__(self, data_root, model_path, device='cuda', vis_params=None, use_pretrained=False, 
@@ -25,7 +25,7 @@ class DetectionPredictor:
         self.vis_params = vis_params or {
             'box_color': (0, 255, 0),
             'thickness': 2,
-            'alpha': 0.6,
+            'alpha': 1,
             'show_labels': True,
             'text_color': (255, 255, 255),
             'text_thickness': 1,
@@ -55,7 +55,6 @@ class DetectionPredictor:
         boxes = prediction['boxes']
         if len(boxes) == 0:
             return prediction
-
         try:
             if mask.dim() == 3: # Process the mask dim (1, H, W)
                 mask = mask.squeeze(0)
@@ -69,13 +68,6 @@ class DetectionPredictor:
             centers[:, 0] = ((boxes_int[:, 0] + boxes_int[:, 2]) / 2).clamp(0, img_size[1] - 1)  # x center
             # centers[:, 1] = ((boxes_int[:, 1] + boxes_int[:, 3]) / 2).clamp(0, img_size[0] - 1)  # y center
             centers[:, 1] = ((boxes_int[:, 3])).clamp(0, img_size[0] - 1)  # ymax
-            
-            ### Print debug information
-            # print(f"Boxes shape: {boxes.shape}")
-            # print(f"Centers shape: {centers.shape}")
-            # print(f"Centers range: x({centers[:, 0].min()}-{centers[:, 0].max()}), "
-            #     f"y({centers[:, 1].min()}-{centers[:, 1].max()})")
-            # print(f"Mask shape: {mask.shape}, dtype: {mask.dtype}")
             
             valid_x = (centers[:, 0] >= 0) & (centers[:, 0] < mask.shape[1]) # Verify that the index is in the valid range
             valid_y = (centers[:, 1] >= 0) & (centers[:, 1] < mask.shape[0])
@@ -130,6 +122,7 @@ class DetectionPredictor:
                 model = _base_model_(pretrained=False)
                 in_features = model.roi_heads.box_predictor.cls_score.in_features
                 model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes=2)
+                # model = build_fasterrcnn_model(weights_name="fasterrcnn_resnet50_fpn", num_classes=2, pretrained=True)
                 model.roi_heads.nms_thresh = 0.5
                 checkpoint = torch.load(model_path, map_location=self.device)
                 state_dict = checkpoint.get('model_state_dict', checkpoint) if isinstance(checkpoint, dict) else checkpoint
@@ -188,19 +181,6 @@ class DetectionPredictor:
         return Image.fromarray(image_np)
 
     def predict_and_evaluate(self, test_loader, save_dir):
-        # if self.subset_ratio < 1.0:
-        #     dataset_size = len(test_loader.dataset)
-        #     subset_size = int(dataset_size * self.subset_ratio)
-        #     indices = torch.randperm(dataset_size)[:subset_size]
-        #     subset = torch.utils.data.Subset(test_loader.dataset, indices)
-        #     test_loader = DataLoader(
-        #         subset,
-        #         batch_size=test_loader.batch_size,
-        #         shuffle=False,
-        #         collate_fn=test_loader.collate_fn,
-        #         num_workers=test_loader.num_workers,
-        #         pin_memory=True)
-
         results_dir = Path(save_dir) / f"vis_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         results_dir.mkdir(parents=True, exist_ok=True)
         
@@ -211,7 +191,6 @@ class DetectionPredictor:
         with torch.no_grad():
             for images, targets, img_names, masks in tqdm(test_loader, desc="Predicting"):
                 try:
-                    # 检查每个样本的标注情况
                     valid_indices = [i for i, target in enumerate(targets) if len(target['boxes']) > 0]
                     if not valid_indices:  # 如果这个batch中所有样本都没有标注
                         skipped_count += len(targets)
@@ -226,23 +205,22 @@ class DetectionPredictor:
                     # Precess each image in the batch
                     for i, (pred, image, img_name, mask) in enumerate(zip(predictions, images, valid_img_names, masks)):
                         try:
-                            filtered_pred = self._filter_by_mask(pred, mask, image.shape[1:]) # Apply mask filtering
-                            # if self.actual_use_pretrained:
-                            confidence_mask = filtered_pred['scores'] >= 0.5 # Apply confidence and class filtering
-                            class_mask = filtered_pred['labels'] == 1
+                            pred = self._filter_by_mask(pred, mask, image.shape[1:]) # Apply mask filtering
+                            confidence_mask = pred['scores'] >= 0.5 # Apply confidence and class filtering
+                            class_mask = pred['labels'] == 1
                             keep_mask = confidence_mask & class_mask
-                            filtered_pred = {k: v[keep_mask] for k, v in filtered_pred.items()}
+                            pred = {k: v[keep_mask] for k, v in pred.items()}
                             
-                            all_predictions.append(filtered_pred) # Save the prediction results
+                            all_predictions.append(pred) # Save the prediction results
                             all_targets.append({
                                 'boxes': valid_targets[i]['boxes'].to(self.device),
                                 'labels': valid_targets[i]['labels'].to(self.device)})
                             
                             vis_img = self.visualize_detection( # Visualize and save images
                                 image,
-                                filtered_pred['boxes'],
-                                filtered_pred['scores'],
-                                filtered_pred['labels'])
+                                pred['boxes'],
+                                pred['scores'],
+                                pred['labels'])
                             vis_img.save(results_dir / img_name)
                             
                         except Exception as e:
