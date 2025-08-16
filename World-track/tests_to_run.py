@@ -7,14 +7,6 @@ def repeat_test_name(test_name, repetition=1):
             extended_dict[f"{num}_{key}"] = value
     return extended_dict
 
-# def repeat_test_name(test_name, repetition=1):
-#     """直接复制原始测试名称，不添加前缀"""
-#     extended_dict = {}
-#     for _ in range(repetition):
-#         extended_dict.update(test_name.copy())  # 使用 copy() 避免引用问题
-#     return extended_dict
-
-
 def add_suffix_to_test_name(test_name, suffix=None):
     # Extend the dictionary dynamically
     extended_dict = {}
@@ -134,33 +126,135 @@ tests_129_2 = {
                                                                   'auxiliary/use_all_pixels_feat_direction'],
 }
 
-tests_129_mean = {
+tests_129_max = {
 
     'fit2_wild_1345_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
-                                                                  'model/m_segnet_mean',
+                                                                  'model/m_segnet_maxPool',
                                                                   'wild_configs/d_wildtrack_1345_Z4',
                                                                   [0, 2, 4, 6],
                                                                   'auxiliary/no_auxiliary'],
 
     'fit2_wild_0246_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
-                                                                  'model/m_segnet_mean',
+                                                                  'model/m_segnet_maxPool',
                                                                   'wild_configs/d_wildtrack_0246_Z4',
                                                                   [1, 3, 4, 5],
                                                                   'auxiliary/no_auxiliary'],
 }
 
-tests_129_averagePool = {
+tests_129_average_1 = {
 
-    'fit2_wild_1345_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
+    'fit2_wild_1345_segnet_fasterrcnn_res50_Z4': ['t_fit_5',
                                                                   'model/m_segnet_averagePool',
                                                                   'wild_configs/d_wildtrack_1345_Z4',
                                                                   [0, 2, 4, 6],
                                                                   'auxiliary/no_auxiliary'],
 
-    'fit2_wild_0246_segnet_512_original_featDirection_res18_Z4': ['t_fit_2',
+    'fit2_wild_0246_segnet_fasterrcnn_res50_Z4': ['t_fit_3',
                                                                   'model/m_segnet_averagePool',
                                                                   'wild_configs/d_wildtrack_0246_Z4',
                                                                   [1, 3, 4, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+tests_129_average_2 = {
+
+    'fit2_wild_1345_segnet_fasterrcnn_res50_Z4': ['t_fit_4',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_wildtrack_1345_Z4',
+                                                                  [0, 2, 4, 6],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_fasterrcnn_res50_Z4': ['t_fit_4',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_wildtrack_0246_Z4',
+                                                                  [1, 3, 4, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+tests_129_average_3 = {
+
+    'fit2_wild_1345_segnet_fasterrcnn_res50_Z4': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_wildtrack_1345_Z4',
+                                                                  [0, 2, 4, 6],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_fasterrcnn_res50_Z4': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_wildtrack_0246_Z4',
+                                                                  [1, 3, 4, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+tests_129_average_res18 = {
+    'fit2_wild_1345_segnet_res18_Z4-2': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool_res18',
+                                                                  'wild_configs/d_wildtrack_1345_Z4',
+                                                                  [0, 2, 4, 6],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_res18_Z4-2': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool_res18',
+                                                                  'wild_configs/d_wildtrack_0246_Z4',
+                                                                  [1, 3, 4, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+tests_129_average_res50 = {
+
+    'fit2_wild_1345_segnet_res50_Z4': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool_res50',
+                                                                  'wild_configs/d_wildtrack_1345_Z4',
+                                                                  [0, 2, 4, 6],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_res50_Z4': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool_res50',
+                                                                  'wild_configs/d_wildtrack_0246_Z4',
+                                                                  [1, 3, 4, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+#####
+
+tests_multiviewx_average_1 = {
+    'fit2_wild_1345_segnet_fasterrcnnFPN_res50_Z4': ['t_fit_3',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_multiviewx_024_Z4',
+                                                                  [0, 2, 4],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_fasterrcnnFPN_res50_Z4': ['t_fit_3',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_multiviewx_135_Z4',
+                                                                  [1, 3, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+tests_multiviewx_average_2 = {
+    'fit2_wild_1345_segnet_fasterrcnnFPN_res50_Z4': ['t_fit_4',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_multiviewx_024_Z4',
+                                                                  [0, 2, 4],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_fasterrcnnFPN_res50_Z4': ['t_fit_4',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_multiviewx_135_Z4',
+                                                                  [1, 3, 5],
+                                                                  'auxiliary/no_auxiliary'],
+}
+
+tests_multiviewx_average_3 = {
+    'fit2_wild_1345_segnet_fasterrcnnFPN_res50_Z4': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_multiviewx_024_Z4',
+                                                                  [0, 2, 4],
+                                                                  'auxiliary/no_auxiliary'],
+
+    'fit2_wild_0246_segnet_fasterrcnnFPN_res50_Z4': ['t_fit_5',
+                                                                  'model/m_segnet_averagePool',
+                                                                  'wild_configs/d_multiviewx_135_Z4',
+                                                                  [1, 3, 5],
                                                                   'auxiliary/no_auxiliary'],
 }
 
