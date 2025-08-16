@@ -1,8 +1,7 @@
 data:
   class_path: datasets.PedestrianDataModule
   init_args:
-    # data_dir: "/media/rasho/Data 1/Arbeit/dataset/wildtrack"  # "/usr/home/tee/Developer/datasets/WILDTRACK"
-    data_dir: "/home/deep/Documents/Wildtrack"
+    data_dir: "/home/s-jiang/Documents/datasets/Wildtrack"
     train_cameras: [0,2,6]
     test_cameras: [0,2,6]
 

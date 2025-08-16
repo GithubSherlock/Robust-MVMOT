@@ -1,9 +1,9 @@
 data:
   class_path: datasets.PedestrianDataModule
   init_args:
-    data_dir: "/home/s-jiang/Documents/datasets/Wildtrack"  # "/usr/home/tee/Developer/datasets/WILDTRACK"
-    train_cameras: [1,3,4,5]
-    test_cameras: [1,3,4,5]
+    data_dir: "/home/s-jiang/Documents/datasets/synthehicle"  # "/usr/home/tee/Developer/datasets/WILDTRACK"
+    train_cameras: [0,2,4,6]
+    test_cameras: [0,2,4,6]
 
 model:
   resolution: [120, 4, 360]  # Y,Z,X

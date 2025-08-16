@@ -1,7 +1,7 @@
 #seed_everything: 1337
 trainer:
   accelerator: gpu
-  devices: [2] # (int) 0~5
+  devices: [3] # (int) 0~5
   max_epochs: 100 # 100
   accumulate_grad_batches: 8
   gradient_clip_val: 0.5
@@ -10,8 +10,8 @@ trainer:
   # logger:
   #   class_path: lightning.pytorch.loggers.TensorBoardLogger
   #   init_args:
-  #     save_dir: "./lightning_logs2"
-  #     name: "local_retrained_experiment" # coco_pretrained_experiment local_retrained_experiment 
+  #     save_dir: "./lightning_logs3"
+  #     name: "res50_0" # coco_pretrained_experiment local_retrained_experiment 
   #     version: null
   callbacks:
     - class_path: LearningRateMonitor
