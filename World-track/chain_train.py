@@ -1,13 +1,14 @@
 import subprocess
+import torch.multiprocessing as mp
+import os
+import yaml
+import argparse
+import socket
 import time
 from time import sleep
 from tests_to_run import *
-import argparse
-
-import os
-import yaml
-
-import socket
+# from prompt_toolkit.contrib.telnet import TelnetServer
+# from extra_util.system_info import SystemInfo
 
 """
 Naming convention:
@@ -72,7 +73,7 @@ def change_folder_name(test_name, console_output=None, is_training=True):
     counter = 2
     new_test_name = test_name
     while new_test_name in to_dirs:
-        new_test_name = test_name + " (" + str(counter) + ")"
+        new_test_name = test_name + "-" + str(counter)
         counter += 1
         if counter >= 50:  # to stop the loop if there is an error
             break
@@ -108,7 +109,7 @@ def command_training(test_name, train_config, model_config, data_config, auxilia
               '-c', os.path.join(f'configs', str(data_config) + '.yml'),
               '-c', os.path.join(f'configs', str(model_config) + '.yml'),
               '-c', os.path.join(f'configs', str(OS_CONFIG) + '.yml'),
-              '-c', os.path.join(f'configs', str(auxiliary_config) + '.yml'),
+              #'-c', os.path.join(f'configs', str(auxiliary_config) + '.yml'),
               )
 
     subprocess.run(['python', script_path, 'fit',
@@ -116,7 +117,7 @@ def command_training(test_name, train_config, model_config, data_config, auxilia
                     '-c', os.path.join(f'configs', str(data_config) + '.yml'),
                     '-c', os.path.join(f'configs', str(model_config) + '.yml'),
                     '-c', os.path.join(f'configs', str(OS_CONFIG) + '.yml'),
-                    '-c', os.path.join(f'configs', str(auxiliary_config) + '.yml'),
+                    #'-c', os.path.join(f'configs', str(auxiliary_config) + '.yml'),
                     # '-c', auxiliary_commands,
                     ])
     # need sleep after each subprocess
@@ -236,32 +237,19 @@ def config_files_exists(tests_dic):
 
 if __name__ == '__main__':
     pc_name = os.getenv('COMPUTERNAME') or os.getenv('HOSTNAME') or socket.gethostname()
-
-    if pc_name == 'rasho-MS-129':
-        MODELS_FOLDER = '/media/rasho/M2_Samsung990/Work/Models/EarlyBird/models/'
-        TESTS_MODELS = '/media/rasho/M2_Samsung990/Work/Models/EarlyBird/tests/'
-        OS_CONFIG = "os_Ubuntu_129"
-        tests = tests_129
     if pc_name == 'ipi8':
-        MODELS_FOLDER = '/data/share/ali/Models/EarlyBird/models/'
-        TESTS_MODELS = '/data/share/ali/Models/EarlyBird/tests/'
-        OS_CONFIG = "os_Ubuntu_8"
-        tests = tests_8
-    if pc_name == 'THE_BEST_PC':
-        MODELS_FOLDER = r'D:\Arbeit\models\EarlyBird\models\\'
-        TESTS_MODELS = r'D:\Arbeit\models\EarlyBird\tests\\'
-        OS_CONFIG = "os_windows"
-        tests = tests_129
-    #####
-    #####
+        """
+        MODELS_FOLDER: where i save the trained models
+        TESTS_MODELS: where i save the testes of each model, i usualy test the models on 2 diffrent camera views
+        """
+        MODELS_FOLDER = '/home/s-jiang/Documents/Robust-MVMOT/World-track/model_weights/'
+        TESTS_MODELS = '/home/s-jiang/Documents/Robust-MVMOT/World-track/model_test/'
+        OS_CONFIG = "os_linux"
+        tests = tests_129_average_res18 # tests_8 tests_129_average_res50
 
-    experiment_name = 'all_models_fit1'  # 'use_pretrained_MaskedRcnn'# 'averagePool_2DMask_3'  # 'averagePool_2DMask_2'# 'concate_avrage'
-
-
-    # 'fine_tune_detached_2d_detections'  # 'fine_tune_avrage_pooling_2' #'concate_avrage_IPI8' # 'concate_avrage'
+    experiment_name = 'res18_fpn_v2'  # 'use_pretrained_MaskedRcnn'# 'averagePool_2DMask_3'  # 'averagePool_2DMask_2'# 'concate_avrage' local_retrained_experiment coco_pretrained_experiment
     def list_of_strings(arg):
         return arg.split(',')
-
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-mn", "--model_name", help="a dict of the models to train", default=None)
@@ -278,10 +266,39 @@ if __name__ == '__main__':
                         help="pass multiple model_name dict and there repetition, "
                              "the names are seperated by ',' ... test_1,2,test_2,3,test_3,1",
                         default=None)
+    parser.add_argument("-t", "--tests", 
+                    help="specify which test configuration to use",)
     parser.add_argument("--additional_args", default=None)
     args = parser.parse_args()
 
-    if args.model_name is not None:
+    if args.tests is not None:
+        print(f"📋 Using test configuration from command line: {args.tests}")
+        # 根据传入的字符串选择对应的测试配置
+        if args.tests == 'tests_8_1':
+            tests = tests_8_1
+        elif args.tests == 'tests_8_2':
+            tests = tests_8_2
+        elif args.tests == 'tests_8':
+            tests = tests_8
+        elif args.tests == 'tests_129_average_1':
+            tests = tests_129_average_1
+        elif args.tests == 'tests_129_average_2':
+            tests = tests_129_average_2
+        elif args.tests == 'tests_129_average_3':
+            tests = tests_129_average_3
+        elif args.tests == 'tests_129_average_res18':
+            tests = tests_129_average_res18
+        elif args.tests == 'tests_129_average_res50':
+            tests = tests_129_average_res50
+        else:
+            print(f"⚠️ Warning: Unknown test configuration '{args.tests}', using default")
+            # 保持使用默认的tests配置
+    else:
+        print(f"📋 Using default test configuration: tests_129_average_res18_1")
+
+    # 处理model_name参数（保持原有逻辑，但现在优先级低于-t参数）
+    if args.model_name is not None and args.tests is None:
+        print(f"📋 Using test configuration from model_name: {args.model_name}")
         if args.model_name == 'tests_8_1':
             tests = tests_8_1
         if args.model_name == 'tests_8_2':
@@ -299,12 +316,12 @@ if __name__ == '__main__':
 
     for key in tests.keys():
         print(key)
-    # print(tests.keys())
-    # exit()
 
     experiment_name = args.experiment_name
     print(f"Running on PC: {pc_name}")
-    # # print all the commands
+    print(f"🎯 Selected test configuration: {type(tests).__name__ if hasattr(tests, '__name__') else 'custom_dict'}")
+    
+    # print all the commands
     PRINT_COMMAND = True
     MODELS_FOLDER = MODELS_FOLDER + experiment_name
     TESTS_MODELS = TESTS_MODELS + experiment_name
@@ -330,7 +347,7 @@ if __name__ == '__main__':
         try:
             conf_files = tests[test_name]
             print('working on: ', test_name)
-            command_training(test_name, conf_files[0], conf_files[1], conf_files[2], conf_files[4])
+            # command_training(test_name, conf_files[0], conf_files[1], conf_files[2], conf_files[4])
             command_testing(test_name)
             testing_on_different_views(test_name, conf_files[3])
 
@@ -343,4 +360,3 @@ if __name__ == '__main__':
         print('finished: ', time.strftime('%H:%M:%S'))
         running_time = round((fin_time - start_time) / 60, 2)
         print('running for: ', running_time, ' minutes')
-
